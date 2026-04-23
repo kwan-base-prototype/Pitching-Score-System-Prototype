@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "Hackathon": {
+      "title": "Hackathon",
+      "description": "The main data structure for a hackathon.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "hackathonName": { "type": "string" },
+        "hackathonSubtitle": { "type": "string" },
+        "hackathonLogo": { "type": "string" },
+        "hackathonColor": { "type": "string" },
+        "phases": { "type": "array" },
+        "teams": { "type": "array" },
+        "judges": { "type": "array" },
+        "mentors": { "type": "array" },
+        "scores": { "type": "array" },
+        "decisions": { "type": "array" },
+        "hiddenCriteriaIds": { "type": "array" },
+        "awardSlides": { "type": "array" },
+        "musicUrl": { "type": "string" },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["id", "hackathonName"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile and role information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] }
+      },
+      "required": ["uid", "email", "role"]
+    }
+  },
+  "firestore": {
+    "/hackathons/{hackathonId}": {
+      "schema": { "$ref": "Hackathon" },
+      "description": "Stores hackathon data."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "Stores user profile and role."
+    }
+  }
+}
