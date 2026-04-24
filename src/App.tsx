@@ -1021,7 +1021,7 @@ export default function App() {
     setIsUploadingMusic(true);
     try {
       const storageRef = ref(storage, `music/${state.id}/${file.name}`);
-      await uploadBytes(storageRef, file);
+      await uploadBytes(storageRef, file, { contentType: file.type });
       const downloadURL = await getDownloadURL(storageRef);
       
       // Update state and Firestore
@@ -1044,29 +1044,31 @@ export default function App() {
     }
   };
 
-  // Reset player ready state when URL changes
+  // Reset player state when URL changes
   useEffect(() => {
     if (musicAudioUrl) {
-      if (readyUrl !== musicAudioUrl) {
-        setIsLoadingMusic(true);
-        setMusicError(null);
-      }
-
-      // Safety timeout: if it takes more than 10 seconds, allow user to try playing
-      const timeout = setTimeout(() => {
-        if (readyUrl !== musicAudioUrl) {
-          console.warn("Music player taking too long to load, enabling controls anyway.");
-          setIsLoadingMusic(false);
-          setReadyUrl(musicAudioUrl); // Force ready so user can try to play
-        }
-      }, 10000);
-
-      return () => clearTimeout(timeout);
+      setReadyUrl('');
+      setIsLoadingMusic(true);
+      setMusicError(null);
     } else {
       setReadyUrl('');
       setIsLoadingMusic(false);
       setIsPlayingMusic(false);
     }
+  }, [musicAudioUrl]);
+
+  // Safety timeout — does NOT touch musicError so errors remain visible
+  useEffect(() => {
+    if (!musicAudioUrl) return;
+    if (readyUrl === musicAudioUrl) return;
+
+    const timeout = setTimeout(() => {
+      console.warn("Music player taking too long to load, enabling controls anyway.");
+      setIsLoadingMusic(false);
+      setReadyUrl(musicAudioUrl);
+    }, 10000);
+
+    return () => clearTimeout(timeout);
   }, [musicAudioUrl, readyUrl]);
 
   const [isAutoScrolling, setIsAutoScrolling] = useState(true);
@@ -6387,7 +6389,6 @@ export default function App() {
               setMusicError("Playback failed. This video might have embedding restrictions.");
               setIsPlayingMusic(false);
               setIsLoadingMusic(false);
-              setReadyUrl('');
             }
           }}
         />
