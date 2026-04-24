@@ -663,7 +663,12 @@ export default function App() {
       const storageRef = ref(storage, `logos/${state.id}/${file.name}`);
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
-      setState(prev => ({ ...prev, hackathonLogo: downloadURL }));
+      const hackathonDoc = doc(db, 'hackathons', state.id);
+      await setDoc(hackathonDoc, { hackathonLogo: downloadURL, updatedAt: Timestamp.now() }, { merge: true });
+      setAppState(prev => ({
+        ...prev,
+        hackathons: prev.hackathons.map(h => h.id === state.id ? { ...h, hackathonLogo: downloadURL } : h)
+      }));
     } catch (error) {
       console.error('Error uploading logo:', error);
       alert('Failed to upload logo. Please try again.');
