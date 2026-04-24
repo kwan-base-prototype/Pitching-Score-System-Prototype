@@ -500,6 +500,7 @@ export default function App() {
   const [isPlayingMusic, setIsPlayingMusic] = useState(false);
   const [isLoadingMusic, setIsLoadingMusic] = useState(false);
   const [isUploadingMusic, setIsUploadingMusic] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [musicError, setMusicError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -654,14 +655,20 @@ export default function App() {
   const [editingPhaseId, setEditingPhaseId] = useState<string | null>(null);
   const [editingCriterionId, setEditingCriterionId] = useState<string | null>(null);
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setState(prev => ({ ...prev, hackathonLogo: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    setIsUploadingLogo(true);
+    try {
+      const storageRef = ref(storage, `logos/${state.id}/${file.name}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+      setState(prev => ({ ...prev, hackathonLogo: downloadURL }));
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      alert('Failed to upload logo. Please try again.');
+    } finally {
+      setIsUploadingLogo(false);
     }
   };
 
@@ -5894,21 +5901,23 @@ export default function App() {
                                 )}
                               </div>
                               <div className="flex-1 space-y-2">
-                                <input 
-                                  type="file" 
-                                  accept="image/*" 
+                                <input
+                                  type="file"
+                                  accept="image/*"
                                   onChange={handleLogoUpload}
-                                  className="hidden" 
-                                  id="logo-upload" 
+                                  className="hidden"
+                                  id="logo-upload"
+                                  disabled={isUploadingLogo}
                                 />
-                                <label 
+                                <label
                                   htmlFor="logo-upload"
-                                  className="block w-full px-4 py-2 bg-accent text-white rounded-xl font-bold uppercase text-[10px] tracking-widest text-center cursor-pointer hover:opacity-90 transition-all"
+                                  className={`block w-full px-4 py-2 rounded-xl font-bold uppercase text-[10px] tracking-widest text-center transition-all flex items-center justify-center gap-2 ${isUploadingLogo ? 'bg-slate-100 text-muted cursor-not-allowed' : 'bg-accent text-white cursor-pointer hover:opacity-90'}`}
                                 >
-                                  Upload Logo
+                                  {isUploadingLogo ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                                  {isUploadingLogo ? 'Uploading...' : 'Upload Logo'}
                                 </label>
                                 {state.hackathonLogo && (
-                                  <button 
+                                  <button
                                     onClick={() => setState(prev => ({ ...prev, hackathonLogo: '' }))}
                                     className="block w-full px-4 py-2 bg-red-500/10 text-red-500 rounded-xl font-bold uppercase text-[10px] tracking-widest text-center hover:bg-red-500/20 transition-all"
                                   >
@@ -5988,6 +5997,9 @@ export default function App() {
                                 </div>
                               </div>
                               <p className="text-[8px] opacity-40 italic">Supports MP3, WAV, YouTube, SoundCloud, and Google Drive.</p>
+                              {musicError && (
+                                <p className="text-[9px] text-red-400 font-medium">{musicError}</p>
+                              )}
                             </div>
                           </div>
 
