@@ -669,9 +669,9 @@ export default function App() {
         ...prev,
         hackathons: prev.hackathons.map(h => h.id === state.id ? { ...h, hackathonLogo: downloadURL } : h)
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading logo:', error);
-      alert('Failed to upload logo. Please try again.');
+      alert(`Failed to upload logo: ${error?.code || error?.message || String(error)}`);
     } finally {
       setIsUploadingLogo(false);
     }
@@ -1036,9 +1036,9 @@ export default function App() {
         ...prev,
         hackathons: prev.hackathons.map(h => h.id === state.id ? updatedHackathon : h)
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading music:', error);
-      alert('Failed to upload music. Please try again.');
+      alert(`Failed to upload music: ${error?.code || error?.message || String(error)}`);
     } finally {
       setIsUploadingMusic(false);
     }
