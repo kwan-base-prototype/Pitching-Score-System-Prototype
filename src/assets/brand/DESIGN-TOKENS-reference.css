@@ -1,0 +1,266 @@
+/* ============================================================
+   BASE PLAYHOUSE — DESIGN TOKENS
+   Brand Identity by WILLING TO DESIGN, January 2023
+   ============================================================ */
+
+/* ── Fonts ─────────────────────────────────────────────────── */
+@font-face {
+  font-family: 'Poppins';
+  src: url('./fonts/Poppins-Regular.ttf') format('truetype');
+  font-weight: 400; font-style: normal;
+}
+@font-face {
+  font-family: 'Poppins';
+  src: url('./fonts/Poppins-Italic.ttf') format('truetype');
+  font-weight: 400; font-style: italic;
+}
+@font-face {
+  font-family: 'Poppins';
+  src: url('./fonts/Poppins-Medium.ttf') format('truetype');
+  font-weight: 500; font-style: normal;
+}
+@font-face {
+  font-family: 'Poppins';
+  src: url('./fonts/Poppins-SemiBold.ttf') format('truetype');
+  font-weight: 600; font-style: normal;
+}
+@font-face {
+  font-family: 'Poppins';
+  src: url('./fonts/Poppins-Bold.ttf') format('truetype');
+  font-weight: 700; font-style: normal;
+}
+@font-face {
+  font-family: 'Poppins';
+  src: url('./fonts/Poppins-BoldItalic.ttf') format('truetype');
+  font-weight: 700; font-style: italic;
+}
+@font-face {
+  font-family: 'Poppins';
+  src: url('./fonts/Poppins-ExtraBold.ttf') format('truetype');
+  font-weight: 800; font-style: normal;
+}
+@font-face {
+  font-family: 'Poppins';
+  src: url('./fonts/Poppins-Black.ttf') format('truetype');
+  font-weight: 900; font-style: normal;
+}
+@font-face {
+  font-family: 'Poppins';
+  src: url('./fonts/Poppins-Light.ttf') format('truetype');
+  font-weight: 300; font-style: normal;
+}
+
+/* Thai — IBM Plex Sans Thai (substituting Prompt per brand guide) */
+@font-face {
+  font-family: 'IBMPlexSansThai';
+  src: url('./fonts/IBMPlexSansThai-Light.ttf') format('truetype');
+  font-weight: 300; font-style: normal;
+}
+@font-face {
+  font-family: 'IBMPlexSansThai';
+  src: url('./fonts/IBMPlexSansThai-Regular.ttf') format('truetype');
+  font-weight: 400; font-style: normal;
+}
+@font-face {
+  font-family: 'IBMPlexSansThai';
+  src: url('./fonts/IBMPlexSansThai-Medium.ttf') format('truetype');
+  font-weight: 500; font-style: normal;
+}
+@font-face {
+  font-family: 'IBMPlexSansThai';
+  src: url('./fonts/IBMPlexSansThai-SemiBold.ttf') format('truetype');
+  font-weight: 600; font-style: normal;
+}
+@font-face {
+  font-family: 'IBMPlexSansThai';
+  src: url('./fonts/IBMPlexSansThai-Bold.ttf') format('truetype');
+  font-weight: 700; font-style: normal;
+}
+
+/* Display / Logo font */
+@font-face {
+  font-family: 'BeyondInfinity';
+  src: url('./fonts/BeyondInfinity-Demo.ttf') format('truetype');
+  font-weight: 400; font-style: normal;
+}
+
+/* ── Color Tokens ───────────────────────────────────────────── */
+:root {
+  /* Brand primaries */
+  --color-red:       #ED4724;   /* Uplifting Red  — C1 M88 Y100 K0 */
+  --color-black:     #231F20;   /* Deep Pro Black — C0 M0 Y0 K100  */
+  --color-white:     #FFFFFF;   /* Pure White                       */
+
+  /* Red scale */
+  --color-red-900:   #7A1A08;
+  --color-red-800:   #A82208;
+  --color-red-700:   #C42D10;
+  --color-red-600:   #D93A1A;
+  --color-red-500:   #ED4724;   /* base */
+  --color-red-400:   #F26B4E;
+  --color-red-300:   #F6917B;
+  --color-red-200:   #FAB8A8;
+  --color-red-100:   #FDDDD5;
+  --color-red-50:    #FEF2EE;
+
+  /* Neutral / Black scale */
+  --color-neutral-950: #231F20; /* Deep Pro Black */
+  --color-neutral-900: #2E2A2B;
+  --color-neutral-800: #3F3B3C;
+  --color-neutral-700: #595455;
+  --color-neutral-600: #756F70;
+  --color-neutral-500: #918C8D;
+  --color-neutral-400: #ADA9A9;
+  --color-neutral-300: #C9C6C6;
+  --color-neutral-200: #E0DEDE;
+  --color-neutral-100: #F2F1F1;
+  --color-neutral-50:  #F8F7F7;
+
+  /* Semantic */
+  --color-fg-primary:    var(--color-black);
+  --color-fg-secondary:  var(--color-neutral-600);
+  --color-fg-muted:      var(--color-neutral-400);
+  --color-fg-inverse:    var(--color-white);
+  --color-fg-accent:     var(--color-red);
+
+  --color-bg-primary:    var(--color-white);
+  --color-bg-secondary:  var(--color-neutral-50);
+  --color-bg-dark:       var(--color-black);
+  --color-bg-accent:     var(--color-red);
+
+  --color-border:        var(--color-neutral-200);
+  --color-border-strong: var(--color-neutral-400);
+
+  /* ── Typography Tokens ──────────────────────────────────── */
+  --font-en:      'Poppins', sans-serif;
+  --font-th:      'IBMPlexSansThai', 'Poppins', sans-serif;
+  --font-display: 'BeyondInfinity', 'Poppins', sans-serif;
+
+  /* Type scale */
+  --text-xs:   0.75rem;    /* 12px */
+  --text-sm:   0.875rem;   /* 14px */
+  --text-base: 1rem;       /* 16px */
+  --text-md:   1.125rem;   /* 18px */
+  --text-lg:   1.25rem;    /* 20px */
+  --text-xl:   1.5rem;     /* 24px */
+  --text-2xl:  2rem;       /* 32px */
+  --text-3xl:  2.5rem;     /* 40px */
+  --text-4xl:  3rem;       /* 48px */
+  --text-5xl:  3.75rem;    /* 60px */
+  --text-6xl:  5rem;       /* 80px */
+
+  /* Line heights */
+  --leading-tight:  1.2;
+  --leading-snug:   1.35;
+  --leading-normal: 1.5;
+  --leading-relaxed:1.7;
+
+  /* Letter spacing */
+  --tracking-tight:   -0.02em;
+  --tracking-normal:   0;
+  --tracking-wide:     0.04em;
+  --tracking-wider:    0.08em;
+  --tracking-widest:   0.15em;
+
+  /* ── Semantic type roles ─────────────────────────────────── */
+  /* Heading 1 — large hero / section */
+  --h1-size:    var(--text-5xl);
+  --h1-weight:  700;
+  --h1-leading: var(--leading-tight);
+  --h1-tracking: var(--tracking-tight);
+
+  /* Heading 2 */
+  --h2-size:    var(--text-4xl);
+  --h2-weight:  700;
+  --h2-leading: var(--leading-tight);
+
+  /* Heading 3 */
+  --h3-size:    var(--text-3xl);
+  --h3-weight:  700;
+  --h3-leading: var(--leading-snug);
+
+  /* Sub-heading */
+  --subheading-size:   var(--text-lg);
+  --subheading-weight: 400;
+  --subheading-leading: var(--leading-snug);
+
+  /* Body */
+  --body-size:    var(--text-base);
+  --body-weight:  400;
+  --body-leading: var(--leading-relaxed);
+
+  /* Caption / label */
+  --caption-size:   var(--text-sm);
+  --caption-weight: 400;
+  --caption-leading: var(--leading-normal);
+
+  /* ── Spacing Scale ───────────────────────────────────────── */
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+  --space-16:  64px;
+  --space-20:  80px;
+  --space-24:  96px;
+  --space-32:  128px;
+
+  /* ── Radius ──────────────────────────────────────────────── */
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-2xl:  24px;
+  --radius-full: 9999px;
+
+  /* ── Shadows ─────────────────────────────────────────────── */
+  --shadow-sm:  0 1px 3px rgba(35,31,32,0.10), 0 1px 2px rgba(35,31,32,0.06);
+  --shadow-md:  0 4px 12px rgba(35,31,32,0.12), 0 2px 4px rgba(35,31,32,0.06);
+  --shadow-lg:  0 10px 30px rgba(35,31,32,0.14), 0 4px 10px rgba(35,31,32,0.08);
+  --shadow-xl:  0 20px 50px rgba(35,31,32,0.16);
+
+  /* ── Transitions ─────────────────────────────────────────── */
+  --ease-base:  cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-out:   cubic-bezier(0, 0, 0.2, 1);
+  --ease-spring:cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast:   150ms;
+  --duration-base:   250ms;
+  --duration-slow:   400ms;
+}
+
+/* ── Base element styles ─────────────────────────────────────── */
+body {
+  font-family: var(--font-en);
+  font-size: var(--body-size);
+  font-weight: var(--body-weight);
+  line-height: var(--body-leading);
+  color: var(--color-fg-primary);
+  background: var(--color-bg-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 {
+  font-size: var(--h1-size);
+  font-weight: var(--h1-weight);
+  line-height: var(--h1-leading);
+  letter-spacing: var(--h1-tracking);
+}
+h2 {
+  font-size: var(--h2-size);
+  font-weight: var(--h2-weight);
+  line-height: var(--h2-leading);
+}
+h3 {
+  font-size: var(--h3-size);
+  font-weight: var(--h3-weight);
+  line-height: var(--h3-leading);
+}
+p {
+  font-size: var(--body-size);
+  font-weight: var(--body-weight);
+  line-height: var(--body-leading);
+}

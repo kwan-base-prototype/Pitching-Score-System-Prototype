@@ -90,7 +90,8 @@ export interface HackathonData {
   hiddenCriteriaIds?: string[];
   awardSlides?: AwardSlide[];
   musicUrl?: string;
-  updatedAt?: any;
+  /** ISO timestamp of the last save. Set by the database layer; the UI never reads it. */
+  updatedAt?: string;
 }
 
 export interface AppState {
