@@ -47,7 +47,6 @@ import {
   Sun,
   Moon,
   Star,
-  RefreshCw,
   List,
   Home,
   ArrowLeft,
@@ -76,38 +75,51 @@ import {
   AwardSlide
 } from './types';
 
-import { 
-  auth, 
-  db, 
-  storage,
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  handleFirestoreError, 
-  OperationType, 
+import {
+  handleDataError,
+  describeError,
+  isPermissionDenied,
+  OperationType,
   testConnection,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut
-} from './firebase';
-import { 
-  onAuthStateChanged, 
-  User 
-} from 'firebase/auth';
-import { 
-  collection, 
-  onSnapshot, 
-  doc, 
-  setDoc, 
-  getDoc,
-  deleteDoc,
-  Timestamp,
-  getDocs,
-  query,
-  orderBy
-} from 'firebase/firestore';
-
+  onAuthChange,
+  rememberCurrentUserId,
+  signIn,
+  signUp,
+  signOutUser,
+  upsertProfile,
+  subscribeHackathons,
+  subscribeScores,
+  subscribeDecisions,
+  saveHackathon,
+  patchHackathon,
+  deleteHackathon as deleteHackathonRow,
+  saveScore,
+  saveDecision,
+  deleteScoreRows,
+  uploadAsset,
+  isSupabaseConfigured,
+  MISSING_CONFIG_MESSAGE,
+  type AppUser,
+} from './supabase';
+// Bundled so the URL carries the right base path and needs no Storage upload.
+import defaultBackgroundMusic from './assets/default-background-music.mp3';
+import {
+  useRoute,
+  buildPath,
+  hackathonRoute,
+  sharedScoringUrl,
+  publicPresentationUrl,
+  HOME_ROUTE,
+  LAUNCHER_ROUTE,
+  Route,
+  Tool
+} from './router';
+import ToolLauncher from './ToolLauncher';
+import { BrandLogo } from './BrandMark';
 const ReactPlayerAny = ReactPlayer as any;
+
+/** The platform owner, who can administer every hackathon regardless of who created it. */
+const ADMIN_EMAIL = 'kwanthananon.ar@baseplayhouse.co';
 
 // Landing Page Component
 function LandingPage({ onLogin, onSignup }: { onLogin: (e: string, p: string) => Promise<void>, onSignup: (e: string, p: string) => Promise<void> }) {
@@ -135,101 +147,106 @@ function LandingPage({ onLogin, onSignup }: { onLogin: (e: string, p: string) =>
   };
 
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center p-6 relative overflow-hidden">
-      {/* Background Decorations */}
-      <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-accent/5 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-ink/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }} />
+    // BASE Playhouse CI from the official brand kit: Deep Pro Black, Uplifting Red,
+    // Poppins/IBM Plex Sans Thai, pill controls. Deliberately unlike Hackathon Hub's light + rose
+    // product styling — this is the company gateway, not the tool.
+    <div className="min-h-screen bg-brand-ink font-brand flex items-center justify-center p-6 relative overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-[-20%] left-[-10%] w-[55%] h-[55%] bg-brand/20 rounded-full blur-[140px]" />
+        <div className="absolute bottom-[-25%] right-[-10%] w-[50%] h-[50%] bg-brand-red-900/25 rounded-full blur-[140px]" />
       </div>
 
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md relative z-10"
+        className="w-full max-w-[26rem] relative z-10 space-y-10"
       >
-        <div className="bg-white border border-border rounded-[2.5rem] p-10 shadow-2xl shadow-ink/5 space-y-8">
-          <div className="text-center space-y-3">
-            <div className="w-20 h-20 bg-ink rounded-3xl flex items-center justify-center mx-auto shadow-xl shadow-ink/20 rotate-3 hover:rotate-0 transition-transform duration-500">
-              <Trophy className="w-10 h-10 text-accent" />
-            </div>
-            <h1 className="text-4xl font-black tracking-tighter text-ink uppercase italic">Hackathon Hub</h1>
-            <p className="text-muted font-bold tracking-widest uppercase text-[10px]">The Ultimate Pitching & Scoring System</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-muted ml-1">Email Address</label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" size={18} />
-                <input 
-                  type="email" 
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@company.com"
-                  className="w-full bg-bg border border-border rounded-2xl py-4 pl-12 pr-4 text-sm font-bold focus:border-ink focus:ring-4 focus:ring-ink/5 outline-none transition-all"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-muted ml-1">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" size={18} />
-                <input 
-                  type="password" 
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-bg border border-border rounded-2xl py-4 pl-12 pr-4 text-sm font-bold focus:border-ink focus:ring-4 focus:ring-ink/5 outline-none transition-all"
-                />
-              </div>
-            </div>
-
-            {error && (
-              <motion.div 
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="p-4 bg-rose-50 border border-rose-100 rounded-xl text-rose-600 text-xs font-bold flex items-center gap-2"
-              >
-                <XCircle size={16} />
-                {error}
-              </motion.div>
-            )}
-
-            <button 
-              type="submit"
-              disabled={loading}
-              className="w-full bg-ink text-white rounded-2xl py-4 font-black uppercase italic tracking-tighter text-lg shadow-xl shadow-ink/20 hover:bg-ink/90 active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-            >
-              {loading ? (
-                <Loader2 className="animate-spin" size={24} />
-              ) : (
-                <>
-                  {isLogin ? <LogIn size={24} /> : <UserPlus size={24} />}
-                  {isLogin ? 'Sign In' : 'Create Account'}
-                </>
-              )}
-            </button>
-          </form>
-
-          <div className="text-center">
-            <button 
-              onClick={() => {
-                setIsLogin(!isLogin);
-                setError(null);
-              }}
-              className="text-[10px] font-black uppercase tracking-widest text-muted hover:text-ink transition-colors"
-            >
-              {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
-            </button>
+        <div className="flex flex-col items-center gap-6 text-center">
+          <BrandLogo variant="white" className="h-9 w-auto" />
+          <div className="space-y-3">
+            <h1 className="text-4xl font-extrabold tracking-tight text-white leading-[1.05]">
+              Uplifting<br />
+              <span className="text-brand">human ability</span>
+            </h1>
+            <p className="text-white/40 text-sm font-medium">
+              Sign in to reach the internal tools.
+            </p>
           </div>
         </div>
 
-        <p className="text-center mt-8 text-[10px] font-bold text-muted uppercase tracking-[0.2em]">
-          Built with precision for innovators
-        </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/40 ml-1">Email</label>
+            <div className="relative">
+              <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-white/25" size={17} />
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@baseplayhouse.co"
+                className="w-full bg-white/[0.06] border border-white/10 rounded-full py-4 pl-13 pr-5 text-sm font-medium text-white placeholder:text-white/25 focus:border-brand focus:bg-white/[0.09] outline-none transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/40 ml-1">Password</label>
+            <div className="relative">
+              <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-white/25" size={17} />
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full bg-white/[0.06] border border-white/10 rounded-full py-4 pl-13 pr-5 text-sm font-medium text-white placeholder:text-white/25 focus:border-brand focus:bg-white/[0.09] outline-none transition-all"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex items-start gap-2.5 p-4 bg-brand/10 border border-brand/30 rounded-lg text-brand text-xs font-semibold"
+            >
+              <XCircle size={16} className="shrink-0 mt-0.5" />
+              <span className="leading-relaxed">{error}</span>
+            </motion.div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-brand text-white rounded-full py-4 font-bold text-sm tracking-wide uppercase shadow-xl shadow-brand/25 hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:hover:brightness-100"
+          >
+            {loading ? (
+              <Loader2 className="animate-spin" size={20} />
+            ) : (
+              <>
+                {isLogin ? <LogIn size={18} /> : <UserPlus size={18} />}
+                {isLogin ? 'Sign in' : 'Create account'}
+              </>
+            )}
+          </button>
+        </form>
+
+        <div className="text-center">
+          <button
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setError(null);
+            }}
+            className="text-xs font-medium text-white/40 hover:text-white transition-colors"
+          >
+            {isLogin ? (
+              <>Need an account? <span className="text-brand font-bold">Create one</span></>
+            ) : (
+              <>Already have an account? <span className="text-brand font-bold">Sign in</span></>
+            )}
+          </button>
+        </div>
       </motion.div>
     </div>
   );
@@ -360,7 +377,10 @@ const INITIAL_HACKATHON_DATA: HackathonData = {
   decisions: [],
   hiddenCriteriaIds: [],
   awardSlides: [],
-  musicUrl: 'https://www.youtube.com/watch?v=RIu4vp_PuXU&t=5s',
+  // Deliberately empty: musicAudioUrl falls back to the bundled track at runtime. Storing the
+  // asset URL here would persist a build-specific path (/src/assets/… in dev, /assets/…-HASH.mp3
+  // in prod) into the database, which then 404s in the other environment.
+  musicUrl: '',
 };
 
 const EMPTY_HACKATHON_DATA: HackathonData = {
@@ -377,6 +397,9 @@ const EMPTY_HACKATHON_DATA: HackathonData = {
   decisions: [],
   hiddenCriteriaIds: [],
   awardSlides: [],
+  // Deliberately empty: musicAudioUrl falls back to the bundled track at runtime. Storing the
+  // asset URL here would persist a build-specific path (/src/assets/… in dev, /assets/…-HASH.mp3
+  // in prod) into the database, which then 404s in the other environment.
   musicUrl: '',
 };
 
@@ -384,6 +407,33 @@ const INITIAL_APP_STATE: AppState = {
   hackathons: [INITIAL_HACKATHON_DATA],
   selectedHackathonId: null,
 };
+
+/**
+ * Owns its own per-second tick. Kept separate from App on purpose: ticking that state in
+ * App re-rendered the entire component tree every second, which cost a ~100ms long task
+ * per tick and made the presentation visibly stutter.
+ */
+function LiveClock() {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // hourCycle h23 rather than hour12:false — the latter lets some engines render midnight
+  // as 24:00:00 instead of 00:00:00.
+  return (
+    <>
+      {now.toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23',
+      })}
+    </>
+  );
+}
 
 function TeamOrderInput({ id, initialValue, onMove }: { id: string, initialValue: number, onMove: (id: string, newIdx: number) => void }) {
   const [val, setVal] = useState<string>(String(initialValue));
@@ -414,88 +464,206 @@ function TeamOrderInput({ id, initialValue, onMove }: { id: string, initialValue
 }
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [isExternalView, setIsExternalView] = useState(false);
+  const [hackathonsLoaded, setHackathonsLoaded] = useState(false);
+  // Surfaces failed writes. Scores update optimistically, so without this a rejected save looks
+  // identical to a successful one and a whole sheet can be filled in and lost.
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [showHackathonPresentation, setShowHackathonPresentation] = useState(false);
   const [showPresentationSettings, setShowPresentationSettings] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
 
-  const [appState, setAppState] = useState<AppState>(INITIAL_APP_STATE);
+  // The URL is the source of truth for which hackathon, tab and overlay are showing.
+  const { route, navigate } = useRoute();
+  const activeTab = route.tab;
+  const isExternalView = route.external;
+  const isPublicView = route.publicView;
+  const showHackathonPresentation = route.overlay === 'present';
+  const showAwardPresentation = route.overlay === 'awards';
+
+  const setActiveTab = (tab: string) => {
+    if (!route.hackathonId) return;
+    navigate({ ...route, tab, overlay: null });
+  };
+
+  const setOverlay = (overlay: Route['overlay']) => {
+    if (!route.hackathonId) return;
+    navigate({ ...route, overlay });
+  };
+
+  const setShowHackathonPresentation = (show: boolean) => setOverlay(show ? 'present' : null);
+  const setShowAwardPresentation = (show: boolean) => setOverlay(show ? 'awards' : null);
+
+  // Both overlays cover the viewport completely, so the sidebar and tab content behind them
+  // are invisible but were still rendering and animating — doubling every table and motion
+  // row on the page. Skip them while an overlay is up.
+  const hasFullScreenOverlay = route.overlay !== null;
+  const showAppShell = !isPublicView && !hasFullScreenOverlay;
+
+  const [rawAppState, setAppState] = useState<AppState>(INITIAL_APP_STATE);
+
+  // selectedHackathonId is derived from the route rather than stored, so a deep link,
+  // a refresh and the browser's back button all agree on which hackathon is open.
+  const appState = useMemo<AppState>(
+    () => ({ ...rawAppState, selectedHackathonId: route.hackathonId }),
+    [rawAppState, route.hackathonId]
+  );
 
   const state = useMemo(() => {
     return appState.hackathons.find(h => h.id === appState.selectedHackathonId) || EMPTY_HACKATHON_DATA;
   }, [appState.hackathons, appState.selectedHackathonId]);
 
+  /** Logs a failed database operation and tells the user, instead of failing silently. */
+  const reportSaveFailure = (context: string, err: unknown) => {
+    handleDataError(err, OperationType.WRITE, null);
+    setSaveError(
+      !isSupabaseConfigured
+        ? `${context}: ${MISSING_CONFIG_MESSAGE}`
+        : isPermissionDenied(err)
+          ? `${context}: the database refused it. Row level security allows only the hackathon's ` +
+            'owner to change its settings — check you are signed in as the right account.'
+          : `${context}: ${describeError(err)}`,
+    );
+  };
+
+  /**
+   * The id of the hackathon with an unsaved local edit, or null. Holding the id rather than a
+   * boolean matters: a bare flag could not tell which hackathon the pending write belonged to, so
+   * switching hackathons mid-debounce saved the newly opened one and dropped the edit.
+   */
+  const pendingSaveRef = useRef<string | null>(null);
+
+  /**
+   * Applies a local edit. The database write is handled by the effect below rather than here:
+   * this used to compute the next value from `appState` captured in the render closure, so two
+   * edits in the same tick would both build on the older value and the second would clobber the
+   * first. The updater form always sees the freshest state.
+   */
   const setState = (updates: HackathonData | ((prev: HackathonData) => HackathonData)) => {
-    const currentHackathon = appState.hackathons.find(h => h.id === appState.selectedHackathonId);
-    if (!currentHackathon) return;
-
-    const nextHackathon = typeof updates === 'function' ? updates(currentHackathon) : updates;
-
-    setAppState(prev => ({
-      ...prev,
-      hackathons: prev.hackathons.map(h => h.id === nextHackathon.id ? nextHackathon : h)
-    }));
-
-    // Firestore update
-    if (isAdmin && nextHackathon.id) {
-      const hackathonDoc = doc(db, 'hackathons', nextHackathon.id);
-      const { scores, decisions, ...metadata } = nextHackathon;
-      setDoc(hackathonDoc, {
-        ...metadata,
-        updatedAt: Timestamp.now()
-      }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.UPDATE, `hackathons/${nextHackathon.id}`));
-    }
+    pendingSaveRef.current = route.hackathonId;
+    setAppState(prev => {
+      const currentHackathon = prev.hackathons.find(h => h.id === route.hackathonId);
+      if (!currentHackathon) return prev;
+      const nextHackathon = typeof updates === 'function' ? updates(currentHackathon) : updates;
+      return {
+        ...prev,
+        hackathons: prev.hackathons.map(h => (h.id === nextHackathon.id ? nextHackathon : h)),
+      };
+    });
   };
 
   const isAdmin = useMemo(() => {
     const currentHackathon = appState.hackathons.find(h => h.id === appState.selectedHackathonId);
-    return user?.email === 'kwanthananon.ar@baseplayhouse.co' || (user && currentHackathon?.ownerId === user.uid);
+    return user?.email === ADMIN_EMAIL || (user && currentHackathon?.ownerId === user.uid);
   }, [user, appState.hackathons, appState.selectedHackathonId]);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+  /** Writes one hackathon's settings. Scores and decisions live in their own tables. */
+  const writeHackathonMetadata = (hackathon: HackathonData) =>
+    saveHackathon(hackathon).catch(err =>
+      reportSaveFailure('Could not save the hackathon settings', err));
 
+  /**
+   * Persists local edits, debounced. Every keystroke used to write the whole hackathon document;
+   * this collapses a burst of edits into one write once typing stops. Only runs when setState
+   * flagged a local change, so an incoming snapshot is never echoed straight back to the server.
+   */
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const role = params.get('role');
-    const id = params.get('id');
-    const hackathonId = params.get('hackathonId');
+    const pendingId = pendingSaveRef.current;
+    if (!pendingId || !isAdmin) return;
 
-    if (role && id) {
-      setIsExternalView(true);
-      setActiveTab(`${role}-${id}`);
-      
-      if (hackathonId) {
-        setAppState(prev => ({ ...prev, selectedHackathonId: hackathonId }));
-      }
+    // Navigated to a different hackathon while a save was still pending — flush the one that was
+    // actually edited now, rather than letting the timer be cleared and the edit disappear.
+    if (pendingId !== state.id) {
+      const edited = rawAppState.hackathons.find(h => h.id === pendingId);
+      pendingSaveRef.current = null;
+      if (edited) void writeHackathonMetadata(edited);
+      return;
     }
-  }, []);
+
+    const timer = setTimeout(() => {
+      pendingSaveRef.current = null;
+      void writeHackathonMetadata(state);
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [state, isAdmin, rawAppState.hackathons]);
+
+  /**
+   * Flushes a pending save when the page is being hidden or closed. Without this, debouncing turned
+   * "edit then immediately close the tab" into silent data loss, which the previous
+   * write-on-every-keystroke behaviour did not have.
+   */
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const flush = () => {
+      const pendingId = pendingSaveRef.current;
+      if (!pendingId) return;
+      const edited = rawAppState.hackathons.find(h => h.id === pendingId);
+      pendingSaveRef.current = null;
+      if (edited) void writeHackathonMetadata(edited);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [isAdmin, rawAppState.hackathons]);
+
+  // Keep the address bar canonical: rewrites legacy ?role=…&id=… scoring links to their
+  // /s/… path, and collapses unroutable URLs onto what is actually being rendered.
+  // Safe to run on every route change — replaceState alone never re-triggers parsing.
+  useEffect(() => {
+    const canonical = buildPath(route);
+    if (canonical !== `${window.location.pathname}${window.location.search}`) {
+      window.history.replaceState(null, '', canonical);
+    }
+  }, [route]);
+
+  // A deep link to a hackathon that has been deleted (or never existed) would otherwise
+  // render an empty shell forever, so send it back to the picker once the list is in.
+  useEffect(() => {
+    if (!hackathonsLoaded || !route.hackathonId) return;
+    if (!rawAppState.hackathons.some(h => h.id === route.hackathonId)) {
+      navigate(HOME_ROUTE, { replace: true });
+    }
+  }, [hackathonsLoaded, route.hackathonId, rawAppState.hackathons]);
 
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedCompareTeamIds, setSelectedCompareTeamIds] = useState<string[]>([]);
   const [showCompareView, setShowCompareView] = useState(false);
-  const [showAwardPresentation, setShowAwardPresentation] = useState(false);
+  // Hides rows where every selected team scored within COMPARISON_TIED_PCT of each other.
+  const [compareOnlyDifferences, setCompareOnlyDifferences] = useState(false);
   const [showAwardConfig, setShowAwardConfig] = useState(false);
   const [awardPresentationStep, setAwardPresentationStep] = useState(0);
   const [awardSlides, setAwardSlides] = useState<{ teamId: string, awardName: string }[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [allScoresSort, setAllScoresSort] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'finalScore', direction: 'desc' });
+  // Heat-map tinting on the Full Scoreboard. Worth switching off when reading exact figures or
+  // printing, so it is a toggle rather than always-on.
+  const [showHeatmap, setShowHeatmap] = useState(true);
   const [activeTablePhaseId, setActiveTablePhaseId] = useState<string | null>(null);
   const [activeTableJudgeId, setActiveTableJudgeId] = useState<string | null>('all');
   const [activeHackathonCriterionIdx, setActiveHackathonCriterionIdx] = useState(0);
   const [isEditingHackathonInfo, setIsEditingHackathonInfo] = useState(false);
-  const [revealedRanks, setRevealedRanks] = useState<number[]>([]);
   const [presentationTheme, setPresentationTheme] = useState<'dark' | 'light'>('dark');
   const [isAutoCycling, setIsAutoCycling] = useState(false);
-  
+
+  // /h/:id/awards can be opened directly, without going through the config modal that
+  // normally seeds the slides — fall back to the saved slide list in that case.
+  useEffect(() => {
+    if (showAwardPresentation && awardSlides.length === 0 && state.awardSlides?.length) {
+      setAwardSlides(state.awardSlides);
+      setAwardPresentationStep(0);
+    }
+  }, [showAwardPresentation, awardSlides.length, state.awardSlides]);
+
+
   // Music & Notification States
   const [isPlayingMusic, setIsPlayingMusic] = useState(false);
   const [isLoadingMusic, setIsLoadingMusic] = useState(false);
@@ -503,13 +671,19 @@ export default function App() {
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [musicError, setMusicError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
+  // 0–100 for the UI; the player takes a 0–1 fraction. Local only, like mute — a playback
+  // preference of whoever is driving the screen, not something to sync to everyone.
+  const [volume, setVolume] = useState(100);
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
+  const volumeControlRef = useRef<HTMLDivElement | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [previousRankings, setPreviousRankings] = useState<string[]>([]);
   const [readyUrl, setReadyUrl] = useState<string>('');
 
   const musicAudioUrl = useMemo(() => {
-    if (!state.musicUrl) return '';
-    
+    // No track configured — fall back to the bundled one so a presentation is never silent.
+    if (!state.musicUrl) return defaultBackgroundMusic;
+
     // Handle Google Drive links
     if (state.musicUrl.includes('drive.google.com')) {
       const idMatch = state.musicUrl.match(/\/d\/([^\/]+)/) || state.musicUrl.match(/id=([^&]+)/);
@@ -522,86 +696,76 @@ export default function App() {
 
   const isPlayerReady = !!musicAudioUrl && readyUrl === musicAudioUrl;
 
-  // Firebase Auth Listener
+  // A deploy without the two Supabase env vars set otherwise looks like an empty database, so say
+  // so up front rather than waiting for the first write to fail.
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setIsAuthReady(true);
-    });
-    testConnection();
-    return () => unsubscribe();
+    if (!isSupabaseConfigured) setSaveError(MISSING_CONFIG_MESSAGE);
   }, []);
 
-  // Firestore Sync - Hackathons
+  // Auth listener. The first call tells us auth has settled, so it is safe to choose between the
+  // sign-in screen and the app rather than flashing one then the other.
+  useEffect(() => {
+    const unsubscribe = onAuthChange(account => {
+      setUser(account);
+      rememberCurrentUserId(account?.uid);
+      setIsAuthReady(true);
+    });
+    void testConnection();
+    return unsubscribe;
+  }, []);
+
+  // Live hackathon list, newest edit first.
   useEffect(() => {
     if (!isAuthReady) return;
 
-    const q = query(collection(db, 'hackathons'), orderBy('updatedAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const hackathons: HackathonData[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data() as HackathonData;
-        hackathons.push({
-          ...EMPTY_HACKATHON_DATA,
-          ...data,
-          // We'll merge scores/decisions separately if this is the selected one
-          scores: data.scores || [],
-          decisions: data.decisions || []
-        });
-      });
-      
-      setAppState(prev => ({
-        ...prev,
-        hackathons: hackathons.length > 0 ? hackathons : prev.hackathons
-      }));
+    const unsubscribe = subscribeHackathons(
+      hackathons => {
+        setAppState(prev => ({
+          ...prev,
+          hackathons: hackathons.length > 0 ? hackathons : prev.hackathons,
+        }));
+        // Only a non-empty read tells us which hackathons really exist. An empty one keeps the
+        // seed list, so treating it as loaded would let the deep-link guard below bounce a
+        // perfectly valid URL back to the picker.
+        if (hackathons.length > 0) setHackathonsLoaded(true);
 
-      // Bootstrap if absolutely empty and user is admin
-      if (hackathons.length === 0 && user?.email === 'kwanthananon.ar@baseplayhouse.co') {
-        const initialId = generateId();
-        const initialDoc = doc(db, 'hackathons', initialId);
-        setDoc(initialDoc, {
-          ...INITIAL_HACKATHON_DATA,
-          id: initialId,
-          ownerId: user.uid,
-          updatedAt: Timestamp.now()
-        }).catch(err => handleFirestoreError(err, OperationType.CREATE, 'hackathons'));
-      }
-    }, (err) => {
-      handleFirestoreError(err, OperationType.LIST, 'hackathons');
-    });
+        // Bootstrap an empty database, but only for the platform owner.
+        if (hackathons.length === 0 && user && user.email === ADMIN_EMAIL) {
+          void saveHackathon({
+            ...INITIAL_HACKATHON_DATA,
+            id: generateId(),
+            ownerId: user.uid,
+          }).catch(err => reportSaveFailure('Could not create the starter hackathon', err));
+        }
+      },
+      err => reportSaveFailure('Could not load hackathons', err),
+    );
 
-    return () => unsubscribe();
+    return unsubscribe;
   }, [isAuthReady, user]);
 
-  // Firestore Sync - Scores & Decisions for selected hackathon
+  // Live scores and verdicts for the open hackathon. Kept in separate tables from the hackathon
+  // itself because many people write them at once, each to their own row.
   useEffect(() => {
-    if (!appState.selectedHackathonId || !isAuthReady) return;
+    const hackathonId = appState.selectedHackathonId;
+    if (!hackathonId || !isAuthReady) return;
 
-    const scoresRef = collection(db, 'hackathons', appState.selectedHackathonId, 'scores');
-    const unsubscribeScores = onSnapshot(scoresRef, (snapshot) => {
-      const scores: ScoreEntry[] = [];
-      snapshot.forEach(doc => scores.push(doc.data() as ScoreEntry));
-      
+    const patch = (updates: Partial<HackathonData>) =>
       setAppState(prev => ({
         ...prev,
-        hackathons: prev.hackathons.map(h => 
-          h.id === appState.selectedHackathonId ? { ...h, scores } : h
-        )
+        hackathons: prev.hackathons.map(h => (h.id === hackathonId ? { ...h, ...updates } : h)),
       }));
-    });
 
-    const decisionsRef = collection(db, 'hackathons', appState.selectedHackathonId, 'decisions');
-    const unsubscribeDecisions = onSnapshot(decisionsRef, (snapshot) => {
-      const decisions: JudgeDecision[] = [];
-      snapshot.forEach(doc => decisions.push(doc.data() as JudgeDecision));
-      
-      setAppState(prev => ({
-        ...prev,
-        hackathons: prev.hackathons.map(h => 
-          h.id === appState.selectedHackathonId ? { ...h, decisions } : h
-        )
-      }));
-    });
+    const unsubscribeScores = subscribeScores(
+      hackathonId,
+      scores => patch({ scores }),
+      err => reportSaveFailure('Could not load scores', err),
+    );
+    const unsubscribeDecisions = subscribeDecisions(
+      hackathonId,
+      decisions => patch({ decisions }),
+      err => reportSaveFailure('Could not load verdicts', err),
+    );
 
     return () => {
       unsubscribeScores();
@@ -609,49 +773,51 @@ export default function App() {
     };
   }, [appState.selectedHackathonId, isAuthReady]);
 
+  /**
+   * Signing in lands on the BASE Lab home rather than on whatever URL was open, so the launcher
+   * is always the entry point into the platform.
+   *
+   * Share links are the exception: /s/… and /p/… are handed to a specific person to open that
+   * exact page, so bouncing them to the launcher would defeat the link. This only runs on a
+   * fresh sign-in, not on a restored session, so deep links still survive a refresh.
+   */
+  const goToLabHome = () => {
+    if (route.external || route.publicView) return;
+    navigate(LAUNCHER_ROUTE, { replace: true });
+  };
+
+  /**
+   * Recording the profile is best effort: it is a convenience copy of the account, so failing to
+   * write it must not stop someone signing in.
+   */
+  const rememberProfile = (account: AppUser) =>
+    upsertProfile(account, ADMIN_EMAIL).catch(err =>
+      handleDataError(err, OperationType.WRITE, 'profiles'));
+
   const login = async (email: string, pass: string) => {
-    try {
-      const result = await signInWithEmailAndPassword(auth, email, pass);
-      // Create/Update user doc
-      const userDoc = doc(db, 'users', result.user.uid);
-      const userSnap = await getDoc(userDoc);
-      if (!userSnap.exists()) {
-        await setDoc(userDoc, {
-          uid: result.user.uid,
-          email: result.user.email,
-          role: result.user.email === 'kwanthananon.ar@baseplayhouse.co' ? 'admin' : 'user'
-        });
-      }
-    } catch (error: any) {
-      throw error;
-    }
+    const account = await signIn(email, pass);
+    await rememberProfile(account);
+    goToLabHome();
   };
 
   const signup = async (email: string, pass: string) => {
-    try {
-      const result = await createUserWithEmailAndPassword(auth, email, pass);
-      const userDoc = doc(db, 'users', result.user.uid);
-      await setDoc(userDoc, {
-        uid: result.user.uid,
-        email: result.user.email,
-        role: result.user.email === 'kwanthananon.ar@baseplayhouse.co' ? 'admin' : 'user'
-      });
-    } catch (error: any) {
-      throw error;
-    }
+    const account = await signUp(email, pass);
+    await rememberProfile(account);
+    goToLabHome();
   };
 
-  const logout = () => signOut(auth);
+  const logout = () => {
+    void signOutUser().catch(err => reportSaveFailure('Could not sign out', err));
+  };
 
   // Removed localStorage persistence
 
-  const [collapsedPhases, setCollapsedPhases] = useState<Record<string, boolean>>({});
   const [collapsedCriteria, setCollapsedCriteria] = useState<Record<string, boolean>>({});
   const [collapsedPhaseSections, setCollapsedPhaseSections] = useState<Record<string, boolean>>({});
   const [activeScoringPhaseId, setActiveScoringPhaseId] = useState<string | null>(null);
   const [activeScoringJudgeId, setActiveScoringJudgeId] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [isDemoLoading, setIsDemoLoading] = useState(false);
+  const [demoStatus, setDemoStatus] = useState<{ kind: 'ok' | 'error'; message: string } | null>(null);
   const [editingPhaseId, setEditingPhaseId] = useState<string | null>(null);
   const [editingCriterionId, setEditingCriterionId] = useState<string | null>(null);
 
@@ -660,11 +826,10 @@ export default function App() {
     if (!file) return;
     setIsUploadingLogo(true);
     try {
-      const storageRef = ref(storage, `logos/${state.id}/${file.name}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
-      const hackathonDoc = doc(db, 'hackathons', state.id);
-      await setDoc(hackathonDoc, { hackathonLogo: downloadURL, updatedAt: Timestamp.now() }, { merge: true });
+      // The upload path is unique per upload so replacing a logo shows immediately — reusing the
+      // filename left the previous image in the CDN cache.
+      const downloadURL = await uploadAsset('logos', `${state.id}/${Date.now()}-${file.name}`, file);
+      await patchHackathon(state.id, { logo_url: downloadURL });
       setAppState(prev => ({
         ...prev,
         hackathons: prev.hackathons.map(h => h.id === state.id ? { ...h, hackathonLogo: downloadURL } : h)
@@ -715,10 +880,6 @@ export default function App() {
     }
   }, [activeTab, state.phases, activeScoringPhaseId]);
 
-  const togglePhaseCollapse = (id: string) => {
-    setCollapsedPhases(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
   const toggleCriterionCollapse = (id: string) => {
     setCollapsedCriteria(prev => ({ ...prev, [id]: !prev[id] }));
   };
@@ -728,6 +889,57 @@ export default function App() {
   };
 
   // Removed localStorage persistence
+
+  /**
+   * A criterion can only be scored meaningfully if it has a positive maximum to normalise
+   * against — teamScores skips `maxScore` of 0 or null entirely. Returns null for those so the
+   * inputs can refuse a value instead of banking one the ranking will ignore.
+   */
+  const scorableMax = (max: number | null | undefined) => (max && max > 0 ? max : null);
+
+  /**
+   * Team search, tolerant of missing fields. Documents written before `productName` existed come
+   * back without it, and calling .toLowerCase() on undefined took the whole page down.
+   */
+  const matchesTeamSearch = (team: { name?: string; productName?: string }) => {
+    const needle = searchQuery.trim().toLowerCase();
+    if (!needle) return true;
+    return `${team.name ?? ''} ${team.productName ?? ''}`.toLowerCase().includes(needle);
+  };
+
+  /** Clamps to 0 when there is no usable maximum, rather than leaving the field unbounded. */
+  const clampScore = (value: number, max: number | null) =>
+    max === null ? 0 : Math.max(0, Math.min(value, max));
+
+  /** Criteria that are configured such that the scoring code silently ignores them. */
+  const misconfiguredCriteria = useMemo(() => {
+    const issues: { phase: string; criterion: string; problem: string }[] = [];
+    (state.phases || []).forEach(phase => {
+      (phase.criteria || []).forEach(criterion => {
+        if (!scorableMax(criterion.maxScore)) {
+          issues.push({ phase: phase.name, criterion: criterion.name, problem: 'no Max Score — cannot be scored or counted' });
+        } else if (!criterion.weight) {
+          issues.push({ phase: phase.name, criterion: criterion.name, problem: 'no Weight — scores are recorded but excluded from the phase total' });
+        }
+      });
+    });
+    return issues;
+  }, [state.phases]);
+
+  /** Phases whose criterion weights do not add up to 100%, which skews the phase score. */
+  const phaseWeightIssues = useMemo(() => {
+    return (state.phases || [])
+      .map(phase => {
+        const total = (phase.criteria || []).reduce((sum, c) => sum + (c.weight || 0), 0);
+        return { name: phase.name, total, criteriaCount: phase.criteria?.length || 0 };
+      })
+      .filter(p => p.criteriaCount > 0 && Math.round(p.total) !== 100);
+  }, [state.phases]);
+
+  const totalPhaseWeight = useMemo(
+    () => (state.phases || []).reduce((sum, p) => sum + (p.weight || 0), 0),
+    [state.phases],
+  );
 
   // Calculations
   const getEffectiveScore = (entry: ScoreEntry | undefined, criterion: Criterion | undefined) => {
@@ -787,7 +999,8 @@ export default function App() {
 
             judgesInPhase.forEach(judgeId => {
               const judge = (state.judges || []).find(j => j.id === judgeId);
-              const judgeWeight = judge?.weight || 1; // Default to 1 if not set
+              // ?? rather than ||: a judge deliberately set to weight 0 must not fall back to 1.
+              const judgeWeight = judge?.weight ?? 1;
 
               const judgeScores = phaseEntries.filter(s => s.judgeId === judgeId);
               if (judgeScores.length > 0) {
@@ -795,8 +1008,10 @@ export default function App() {
                 let totalWeightUsed = 0;
                 phase.criteria.forEach(c => {
                   const entry = judgeScores.find(e => e.criterionId === c.id);
-                  const score = getEffectiveScore(entry, c) || 0; // Treat null as 0
-                  if (c.maxScore && c.weight) {
+                  const score = getEffectiveScore(entry, c);
+                  // An unscored criterion is left out of both sides of the ratio, so its weight is
+                  // redistributed across whatever was scored instead of counting as a zero.
+                  if (score !== null && c.maxScore && c.weight) {
                     judgeWeightedScore += (score / c.maxScore) * 100 * (c.weight / 100);
                     totalWeightUsed += c.weight;
                   }
@@ -829,8 +1044,10 @@ export default function App() {
                   
                   if (isAssigned) {
                     const entry = mentorScores.find(e => e.criterionId === c.id);
-                    const score = getEffectiveScore(entry, c) || 0;
-                    if (c.maxScore && c.weight) {
+                    const score = getEffectiveScore(entry, c);
+                    // Same redistribution as the judge branch: unscored criteria are excluded
+                    // from the ratio rather than counted as zero.
+                    if (score !== null && c.maxScore && c.weight) {
                       mentorWeightedScore += (score / c.maxScore) * 100 * (c.weight / 100);
                       totalWeightUsed += c.weight;
                     }
@@ -881,7 +1098,10 @@ export default function App() {
 
       const judgeDecisions: Record<string, string | null> = {};
       const mentorDecisions: Record<string, string | null> = {};
-      const lastPhaseId = state.phases && state.phases.length > 0 ? state.phases[state.phases.length - 1].id : null;
+      // The last *judge* phase, to mirror how mentorDecisions picks the last mentor phase. Using
+      // the last phase overall returned nothing whenever the event ended on a mentor phase.
+      const judgePhases = (state.phases || []).filter(p => p.type === 'judge');
+      const lastPhaseId = judgePhases.length > 0 ? judgePhases[judgePhases.length - 1].id : null;
       
       (state.judges || []).forEach(j => {
         judgeDecisions[j.id] = (state.decisions || []).find(d => d.teamId === team.id && d.judgeId === j.id && d.phaseId === lastPhaseId)?.decision || null;
@@ -908,7 +1128,7 @@ export default function App() {
               const score = getEffectiveScore(s, c);
               if (score !== null) {
                 const judge = (state.judges || []).find(j => j.id === s.judgeId);
-                const weight = judge?.weight || 1;
+                const weight = judge?.weight ?? 1;
                 weightedSum += score * weight;
                 weightTotal += weight;
               }
@@ -955,6 +1175,168 @@ export default function App() {
     });
   }, [teamScores]);
 
+  /**
+   * Reshapes the selected teams into one row per metric so the comparison view can put the same
+   * measure side by side. Each row carries its own spread (best minus worst) and who holds them,
+   * which is what makes "where do these teams actually differ" answerable at a glance.
+   *
+   * `spreadPct` normalises the gap against the metric's own scale, so a 2-point gap on a /10
+   * criterion and a 20-point gap on a /100 phase total are comparable.
+   */
+  const COMPARISON_TIED_PCT = 3;
+
+  const comparison = useMemo(() => {
+    const teams = selectedCompareTeamIds
+      .map(id => teamScores.find(t => t.id === id))
+      .filter((t): t is typeof teamScores[number] => !!t);
+
+    if (teams.length < 2) return null;
+
+    type Row = {
+      key: string;
+      label: string;
+      kind: 'final' | 'phase' | 'criterion';
+      scaleMax: number;
+      suffix: string;
+      note?: string;
+      values: (number | null)[];
+      best: number | null;
+      worst: number | null;
+      spread: number;
+      spreadPct: number;
+      tied: boolean;
+    };
+
+    const buildRow = (
+      key: string,
+      label: string,
+      kind: Row['kind'],
+      scaleMax: number,
+      suffix: string,
+      values: (number | null)[],
+      note?: string,
+    ): Row => {
+      const present = values.filter((v): v is number => v !== null);
+      const best = present.length ? Math.max(...present) : null;
+      const worst = present.length ? Math.min(...present) : null;
+      const spread = best !== null && worst !== null ? best - worst : 0;
+      const spreadPct = scaleMax > 0 ? (spread / scaleMax) * 100 : 0;
+      return {
+        key, label, kind, scaleMax, suffix, note, values, best, worst, spread, spreadPct,
+        tied: spreadPct < COMPARISON_TIED_PCT,
+      };
+    };
+
+    const rows: Row[] = [
+      buildRow('final', 'Final Score', 'final', 100, '%', teams.map(t => t.finalScore ?? 0)),
+    ];
+
+    (state.phases || []).forEach(phase => {
+      rows.push(buildRow(
+        `phase-${phase.id}`, phase.name, 'phase', 100, '%',
+        teams.map(t => t.phaseScores?.[phase.id] ?? 0),
+        phase.weight != null ? `${phase.weight}% of final` : undefined,
+      ));
+      (phase.criteria || []).forEach(criterion => {
+        rows.push(buildRow(
+          `criterion-${criterion.id}`, criterion.name, 'criterion', criterion.maxScore || 10, '',
+          teams.map(t => (t.criteriaScores?.[criterion.id] ?? null)),
+          // A criterion with no max is excluded from the phase total by the scoring code
+          // (`if (c.maxScore && c.weight)`), so say that rather than printing "max 0".
+          criterion.maxScore ? `max ${criterion.maxScore}` : 'no max set — not counted',
+        ));
+      });
+    });
+
+    // The headline: which criteria separate these teams, and which are effectively level.
+    const criterionRows = rows.filter(r => r.kind === 'criterion');
+    const biggestGaps = [...criterionRows].sort((a, b) => b.spreadPct - a.spreadPct).slice(0, 3);
+
+    return {
+      teams,
+      rows,
+      biggestGaps: biggestGaps.filter(r => !r.tied),
+      tiedCount: criterionRows.filter(r => r.tied).length,
+      criterionCount: criterionRows.length,
+    };
+  }, [selectedCompareTeamIds, teamScores, state.phases]);
+
+  /**
+   * The Full Scoreboard rows, plus the value range of every score column. Ranges are taken from
+   * the rows actually on screen (so they follow the search filter) and are what the heat-map
+   * colouring below scales against — a cell is only "green" relative to its own column.
+   */
+  const allScoresView = useMemo(() => {
+    const rows = [...teamScores]
+      .filter(t =>
+        matchesTeamSearch(t))
+      .sort((a, b) => {
+        let valA = 0;
+        let valB = 0;
+
+        if (allScoresSort.key === 'name') {
+          valA = a.originalIndex;
+          valB = b.originalIndex;
+        } else if (allScoresSort.key === 'finalScore') {
+          valA = a.finalScore;
+          valB = b.finalScore;
+        } else if (allScoresSort.key.startsWith('phase-')) {
+          const phaseId = allScoresSort.key.replace('phase-', '');
+          valA = a.phaseScores[phaseId] || 0;
+          valB = b.phaseScores[phaseId] || 0;
+        } else {
+          valA = a.criteriaScores[allScoresSort.key] || 0;
+          valB = b.criteriaScores[allScoresSort.key] || 0;
+        }
+
+        if (valA < valB) return allScoresSort.direction === 'desc' ? 1 : -1;
+        if (valA > valB) return allScoresSort.direction === 'desc' ? -1 : 1;
+        return 0;
+      });
+
+    const ranges = new Map<string, { min: number; max: number }>();
+    const track = (key: string, value: number | null | undefined) => {
+      if (value === null || value === undefined || Number.isNaN(value)) return;
+      const current = ranges.get(key);
+      if (!current) ranges.set(key, { min: value, max: value });
+      else {
+        current.min = Math.min(current.min, value);
+        current.max = Math.max(current.max, value);
+      }
+    };
+
+    rows.forEach(team => {
+      track('finalScore', team.finalScore);
+      (state.phases || []).forEach(phase => {
+        track(`phase-${phase.id}`, team.phaseScores?.[phase.id] ?? 0);
+        (phase.criteria || []).forEach(criterion => {
+          track(criterion.id, team.criteriaScores?.[criterion.id]);
+        });
+      });
+    });
+
+    return { rows, ranges };
+  }, [teamScores, searchQuery, allScoresSort, state.phases]);
+
+  /**
+   * Red (lowest in the column) through amber to green (highest), interpolated on the HSL hue so
+   * mid-table values read as a gradient rather than falling into buckets. Returns nothing when a
+   * column has no spread — tinting every cell the same colour would imply a ranking that is not there.
+   */
+  const heatCellStyle = (columnKey: string, value: number | null | undefined): React.CSSProperties | undefined => {
+    if (!showHeatmap) return undefined;
+    if (value === null || value === undefined || Number.isNaN(value)) return undefined;
+    const range = allScoresView.ranges.get(columnKey);
+    if (!range || range.max === range.min) return undefined;
+
+    const t = (value - range.min) / (range.max - range.min);
+    const hue = t * 120;
+    return {
+      backgroundColor: `hsl(${hue} 80% 92%)`,
+      color: `hsl(${hue} 65% 25%)`,
+    };
+  };
+
   const hackathonPhaseId = useMemo(() => {
     return state.phases.find(p => p.name.toLowerCase().includes('hackathon'))?.id || 'hack';
   }, [state.phases]);
@@ -1000,6 +1382,11 @@ export default function App() {
     setPreviousRankings(currentRankIds);
   }, [hackathonSortedTeams, notificationsEnabled, showHackathonPresentation]);
 
+  // Points at the underlying media element so playback can be restarted if a source ever
+  // ignores the `loop` attribute. A local file loops natively and never fires onEnded;
+  // YouTube and SoundCloud go through their own elements, so this is the backstop.
+  const mediaRef = useRef<HTMLVideoElement | null>(null);
+
   const lastToggleTime = useRef(0);
   const toggleMusic = () => {
     const now = Date.now();
@@ -1020,18 +1407,12 @@ export default function App() {
 
     setIsUploadingMusic(true);
     try {
-      const storageRef = ref(storage, `music/${state.id}/${file.name}`);
-      await uploadBytes(storageRef, file, { contentType: file.type });
-      const downloadURL = await getDownloadURL(storageRef);
-      
-      // Update state and Firestore
+      const downloadURL = await uploadAsset('music', `${state.id}/${Date.now()}-${file.name}`, file);
+
       const updatedHackathon = { ...state, musicUrl: downloadURL };
-      const hackathonDoc = doc(db, 'hackathons', state.id);
-      await setDoc(hackathonDoc, {
-        musicUrl: downloadURL,
-        updatedAt: Timestamp.now()
-      }, { merge: true });
-      
+      await patchHackathon(state.id, { music_url: downloadURL });
+
+
       setAppState(prev => ({
         ...prev,
         hackathons: prev.hackathons.map(h => h.id === state.id ? updatedHackathon : h)
@@ -1057,13 +1438,54 @@ export default function App() {
     }
   }, [musicAudioUrl]);
 
-  // Safety timeout — does NOT touch musicError so errors remain visible
+  // Dismiss the volume slider on an outside click, and on Escape.
+  useEffect(() => {
+    if (!showVolumeSlider) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (!volumeControlRef.current?.contains(e.target as Node)) setShowVolumeSlider(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowVolumeSlider(false);
+    };
+
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showVolumeSlider]);
+
+  // Close it along with the presentation so it is never left hanging open on re-entry.
+  useEffect(() => {
+    if (!hasFullScreenOverlay) setShowVolumeSlider(false);
+  }, [hasFullScreenOverlay]);
+
+  // The player is mounted globally, outside the overlay, and its only play/pause control
+  // lives inside the presentation footer. Leaving the presentation therefore stripped away
+  // the one way to stop the audio, so stop it on the way out.
+  useEffect(() => {
+    if (!hasFullScreenOverlay) setIsPlayingMusic(false);
+  }, [hasFullScreenOverlay]);
+
+  // Tracks the source the player is currently supposed to be on, so a late onReady fired by
+  // a previous source cannot mark the new one as ready (which left readyUrl pointing at the
+  // old URL and the safety timeout below armed against a player that was already loaded).
+  const latestMusicUrl = useRef(musicAudioUrl);
+  useEffect(() => {
+    latestMusicUrl.current = musicAudioUrl;
+  }, [musicAudioUrl]);
+
+  // Last resort for a source whose onReady never arrives at all — a dead link or a stalled
+  // network would otherwise leave the play button disabled forever. Deliberately leaves
+  // musicError alone so a real playback error stays on screen.
   useEffect(() => {
     if (!musicAudioUrl) return;
     if (readyUrl === musicAudioUrl) return;
 
     const timeout = setTimeout(() => {
-      console.warn("Music player taking too long to load, enabling controls anyway.");
+      console.warn("Music player never reported ready, enabling controls anyway:", musicAudioUrl);
       setIsLoadingMusic(false);
       setReadyUrl(musicAudioUrl);
     }, 10000);
@@ -1153,13 +1575,29 @@ export default function App() {
     }));
   };
 
+  /**
+   * Removes score and verdict rows for teams, judges, phases or criteria that have been deleted.
+   *
+   * Saving a hackathon never touches those tables, so filtering the rows out of local state alone
+   * left the server copies intact and the next realtime read brought them straight back.
+   */
+  const purgeScoreRows = async (scores: ScoreEntry[], decisions: JudgeDecision[]) => {
+    const hackathonId = appState.selectedHackathonId;
+    if (!hackathonId || (scores.length === 0 && decisions.length === 0)) return;
+    await deleteScoreRows(hackathonId, scores, decisions).catch(err =>
+      reportSaveFailure('Could not delete the related scores', err));
+  };
+
   const deleteTeam = (id: string) => {
+    const removedScores = (state.scores || []).filter(s => s.teamId === id);
+    const removedDecisions = (state.decisions || []).filter(d => d.teamId === id);
     setState(prev => ({
       ...prev,
       teams: prev.teams.filter(t => t.id !== id),
       scores: prev.scores.filter(s => s.teamId !== id),
       decisions: prev.decisions.filter(d => d.teamId !== id)
     }));
+    void purgeScoreRows(removedScores, removedDecisions);
   };
 
   const toggleCompare = (teamId: string) => {
@@ -1175,128 +1613,214 @@ export default function App() {
   };
 
   const moveTeam = (id: string, newIndex: number) => {
-    const teams = [...state.teams];
-    const oldIndex = teams.findIndex(t => t.id === id);
-    if (oldIndex === -1) return;
-    
-    const [movedTeam] = teams.splice(oldIndex, 1);
-    const targetIndex = Math.max(0, Math.min(newIndex, teams.length));
-    teams.splice(targetIndex, 0, movedTeam);
-    
-    setState(prev => ({ ...prev, teams }));
+    // Reordered inside the updater. Building the array from the render closure and then handing
+    // it over whole discards `prev`, so two moves in quick succession lose the first one.
+    setState(prev => {
+      const teams = [...prev.teams];
+      const oldIndex = teams.findIndex(t => t.id === id);
+      if (oldIndex === -1) return prev;
+
+      const [movedTeam] = teams.splice(oldIndex, 1);
+      const targetIndex = Math.max(0, Math.min(newIndex, teams.length));
+      teams.splice(targetIndex, 0, movedTeam);
+
+      return { ...prev, teams };
+    });
   };
 
-  const loadMockData = async () => {
+  /**
+   * Fills the current hackathon with generated scores in memory only — nothing is written to the
+   * database. It is a preview: instant, harmless to real data, and gone on reload.
+   */
+  const loadMockData = () => {
     if (!appState.selectedHackathonId) return;
-    setIsDemoLoading(true);
+    setDemoStatus(null);
 
-    // Use current state or default structure if empty
+    // Fall back to the built-in structure when the hackathon has no teams of its own. Kept local
+    // too — the old version saved it, which quietly overwrote a real hackathon's setup.
     const baseState = state.teams.length > 0 ? state : { ...INITIAL_HACKATHON_DATA, id: appState.selectedHackathonId };
-    
-    // Ensure the base structure is saved to Firestore first
-    setState(baseState);
 
     const mockScores: ScoreEntry[] = [];
     const mockDecisions: JudgeDecision[] = [];
 
-    baseState.teams.forEach((team, tIdx) => {
-      const isSimpleTeam = tIdx < 5;
-      const simpleScore = 10 - (tIdx * 2); // 10, 8, 6, 4, 2
+    /**
+     * Scores are generated from a few latent factors rather than drawn independently, because
+     * independent random numbers do not look like real judging: a team that impresses one judge
+     * generally impresses the next, and a team strong on tech is often weaker on presentation.
+     *
+     *   fraction = teamAbility + criterionAffinity + scorerBias + scorerOpinion + noise
+     *
+     * teamAbility        how good the team is overall — drives the ranking
+     * criterionAffinity  that team's strength or weakness on one criterion
+     * scorerBias         a judge/mentor who marks consistently generously or harshly
+     * scorerOpinion      this scorer's own read on this team — without it the panel agreed
+     *                    almost perfectly (r≈0.96), where real panels land nearer 0.5–0.7
+     * noise              everything else, kept small
+     *
+     * The result is a fraction of each criterion's own maxScore, so it adapts to any scale.
+     */
+    const gaussian = (stdDev: number) => {
+      // Box–Muller. Math.random() never returns 0 here because of the 1 - x.
+      const u = 1 - Math.random();
+      const v = Math.random();
+      return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v) * stdDev;
+    };
+    const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 
-      // Hackathon (Mentor)
-      baseState.mentors.forEach(mentor => {
-        baseState.phases.find(p => p.id === 'hack')?.criteria.forEach(c => {
-          mockScores.push({
-            teamId: team.id,
-            judgeId: mentor.id,
-            criterionId: c.id,
-            phaseId: 'hack',
-            score: isSimpleTeam ? simpleScore : Math.floor(Math.random() * 4) + 7
+    // Spread abilities over a believable band. Real events cluster mid-to-high with a couple of
+    // standouts and a couple of stragglers, rather than spanning the whole 0–100 range.
+    const teamAbility = new Map<string, number>();
+    baseState.teams.forEach(team => {
+      teamAbility.set(team.id, clamp(0.72 + gaussian(0.13), 0.35, 0.98));
+    });
+
+    const affinity = new Map<string, number>();
+    const affinityFor = (teamId: string, criterionId: string) => {
+      const key = `${teamId}:${criterionId}`;
+      if (!affinity.has(key)) affinity.set(key, gaussian(0.09));
+      return affinity.get(key)!;
+    };
+
+    const scorerBias = new Map<string, number>();
+    [...baseState.judges, ...baseState.mentors].forEach(person => {
+      scorerBias.set(person.id, gaussian(0.06));
+    });
+
+    const opinion = new Map<string, number>();
+    const opinionFor = (scorerId: string, teamId: string) => {
+      const key = `${scorerId}:${teamId}`;
+      if (!opinion.has(key)) opinion.set(key, gaussian(0.1));
+      return opinion.get(key)!;
+    };
+
+    const fractionFor = (teamId: string, criterionId: string, scorerId: string) =>
+      clamp(
+        (teamAbility.get(teamId) ?? 0.7) +
+          affinityFor(teamId, criterionId) +
+          (scorerBias.get(scorerId) ?? 0) +
+          opinionFor(scorerId, teamId) +
+          gaussian(0.05),
+        0.12,
+        1,
+      );
+
+    baseState.phases.forEach(phase => {
+      // A phase is scored by whichever group it belongs to, read off the phase itself rather
+      // than assuming the built-in 'hack'/'mentoring'/'pitching' ids the old version relied on.
+      const scorers = phase.type === 'judge' ? baseState.judges : baseState.mentors;
+      if (!scorers?.length || !phase.criteria?.length) return;
+
+      baseState.teams.forEach(team => {
+        scorers.forEach(scorer => {
+          const mentor = phase.type === 'mentor'
+            ? baseState.mentors.find(m => m.id === scorer.id)
+            : undefined;
+
+          // Respect mentor assignments — a mentor who is not on a team does not score it.
+          const teamAssigned = !mentor?.assignedTeamIds?.length || mentor.assignedTeamIds.includes(team.id);
+          if (!teamAssigned) return;
+
+          const criteria = phase.criteria.filter(c =>
+            // Skip criteria the scoring code ignores, so the demo never shows a value in a field
+            // the real UI disables.
+            (scorableMax(c.maxScore) || c.subCriteria?.length) &&
+            (!mentor?.assignedCriteriaIds?.length || mentor.assignedCriteriaIds.includes(c.id)));
+          if (!criteria.length) return;
+
+          criteria.forEach(criterion => {
+            const fraction = fractionFor(team.id, criterion.id, scorer.id);
+            const entry: ScoreEntry = {
+              teamId: team.id,
+              judgeId: scorer.id,
+              criterionId: criterion.id,
+              phaseId: phase.id,
+              score: null,
+            };
+
+            if (criterion.subCriteria?.length) {
+              // Fill the sub-criteria the same way a scorer would, then let the criterion total
+              // fall out of them — writing only `score` would leave the checkboxes blank in the UI.
+              const selectedSubCriteriaIds: string[] = [];
+              const subCriteriaValues: Record<string, number> = {};
+
+              criterion.subCriteria.forEach(sub => {
+                const max = sub.score || 0;
+                if (sub.type === 'numeric') {
+                  subCriteriaValues[sub.id] = clamp(Math.round(fraction * max), 0, max);
+                } else if (max > 1) {
+                  subCriteriaValues[sub.id] = clamp(Math.round(fraction * max), 0, max);
+                } else if (Math.random() < fraction) {
+                  selectedSubCriteriaIds.push(sub.id);
+                }
+              });
+
+              entry.selectedSubCriteriaIds = selectedSubCriteriaIds;
+              entry.subCriteriaValues = subCriteriaValues;
+              entry.score = getEffectiveScore(entry, criterion);
+            } else {
+              const max = criterion.maxScore || 10;
+              // Never a flat 0 — a scorer who filled the sheet in gave *something*.
+              entry.score = clamp(Math.round(fraction * max), 1, max);
+            }
+
+            mockScores.push(entry);
           });
-        });
 
-        // Potential for Hackathon
-        const potentials: ('high' | 'medium' | 'low' | 'critical')[] = ['high', 'high', 'medium', 'low'];
-        mockDecisions.push({
-          teamId: team.id,
-          judgeId: mentor.id,
-          phaseId: 'hack',
-          decision: isSimpleTeam ? (tIdx < 3 ? 'high' : 'medium') : potentials[Math.floor(Math.random() * potentials.length)]
-        });
-      });
+          // Verdicts track the scores, including this scorer's own read on the team — otherwise
+          // someone could mark a team down and still vote 'pass'.
+          const teamFraction = clamp(
+            (teamAbility.get(team.id) ?? 0.7) +
+              (scorerBias.get(scorer.id) ?? 0) +
+              opinionFor(scorer.id, team.id) +
+              gaussian(0.05),
+            0,
+            1,
+          );
+          const decision: JudgeDecision['decision'] = phase.type === 'judge'
+            ? (teamFraction >= 0.74 ? 'pass' : teamFraction >= 0.56 ? 'not_sure' : 'fail')
+            : (teamFraction >= 0.8 ? 'high' : teamFraction >= 0.63 ? 'medium' : teamFraction >= 0.45 ? 'low' : 'critical');
 
-      // Mentoring (Mentors)
-      baseState.mentors.forEach(mentor => {
-        baseState.phases.find(p => p.id === 'mentoring')?.criteria.forEach(c => {
-          mockScores.push({
-            teamId: team.id,
-            judgeId: mentor.id,
-            criterionId: c.id,
-            phaseId: 'mentoring',
-            score: isSimpleTeam ? simpleScore : Math.floor(Math.random() * 5) + 6
-          });
-        });
-
-        // Potential for Mentoring
-        const potentials: ('high' | 'medium' | 'low' | 'critical')[] = ['high', 'medium', 'medium', 'low'];
-        mockDecisions.push({
-          teamId: team.id,
-          judgeId: mentor.id,
-          phaseId: 'mentoring',
-          decision: isSimpleTeam ? (tIdx < 3 ? 'high' : 'medium') : potentials[Math.floor(Math.random() * potentials.length)]
-        });
-      });
-
-      // Pitching (Judges)
-      baseState.judges.forEach(judge => {
-        baseState.phases.find(p => p.id === 'pitching')?.criteria.forEach(c => {
-          mockScores.push({
-            teamId: team.id,
-            judgeId: judge.id,
-            criterionId: c.id,
-            phaseId: 'pitching',
-            score: isSimpleTeam ? simpleScore : Math.floor(Math.random() * 5) + 6
-          });
-        });
-
-        // Verdict
-        const decisions: ('pass' | 'fail' | 'not_sure')[] = ['pass', 'pass', 'fail', 'not_sure'];
-        mockDecisions.push({
-          teamId: team.id,
-          judgeId: judge.id,
-          phaseId: 'pitching',
-          decision: isSimpleTeam ? (tIdx < 2 ? 'pass' : (tIdx < 4 ? 'not_sure' : 'fail')) : decisions[Math.floor(Math.random() * decisions.length)]
+          mockDecisions.push({ teamId: team.id, judgeId: scorer.id, phaseId: phase.id, decision });
         });
       });
     });
 
-    // Write scores and decisions to Firestore sub-collections
-    try {
-      const scorePromises = mockScores.map(score => {
-        const scoreId = `${score.teamId}_${score.judgeId}_${score.criterionId}_${score.phaseId}`;
-        const scoreDoc = doc(db, 'hackathons', appState.selectedHackathonId!, 'scores', scoreId);
-        return setDoc(scoreDoc, score).catch(err => handleFirestoreError(err, OperationType.WRITE, `hackathons/${appState.selectedHackathonId}/scores/${scoreId}`));
+    if (mockScores.length === 0 && mockDecisions.length === 0) {
+      setDemoStatus({
+        kind: 'error',
+        message:
+          'Nothing to generate — this hackathon needs at least one phase with criteria, plus ' +
+          'judges for judge phases or mentors for mentor phases.',
       });
-
-      const decisionPromises = mockDecisions.map(decision => {
-        const decisionId = `${decision.teamId}_${decision.judgeId}_${decision.phaseId}`;
-        const decisionDoc = doc(db, 'hackathons', appState.selectedHackathonId!, 'decisions', decisionId);
-        return setDoc(decisionDoc, decision).catch(err => handleFirestoreError(err, OperationType.WRITE, `hackathons/${appState.selectedHackathonId}/decisions/${decisionId}`));
-      });
-
-      await Promise.all([...scorePromises, ...decisionPromises]);
-    } catch (err) {
-      console.error("Mock data generation error:", err);
-      // Re-throw to be caught by ErrorBoundary or displayed in UI
-      throw err;
+      return;
     }
 
-    setIsDemoLoading(false);
+    // In-memory only: a preview does not need to be persisted or shared to be useful, and this
+    // way it can never overwrite a real hackathon's scores.
+    setAppState(prev => ({
+      ...prev,
+      hackathons: prev.hackathons.some(h => h.id === baseState.id)
+        ? prev.hackathons.map(h =>
+            h.id === baseState.id
+              ? { ...baseState, scores: mockScores, decisions: mockDecisions }
+              : h)
+        : [...prev.hackathons, { ...baseState, scores: mockScores, decisions: mockDecisions }],
+    }));
+
+    setDemoStatus({
+      kind: 'ok',
+      message:
+        `Generated ${mockScores.length} scores and ${mockDecisions.length} verdicts across ` +
+        `${baseState.teams.length} teams. Preview only — not saved to the database, and cleared on reload.`,
+    });
   };
 
   const clearAllData = () => {
+    const allScores = state.scores || [];
+    const allDecisions = state.decisions || [];
     setState(prev => ({ ...EMPTY_HACKATHON_DATA, id: prev.id }));
     setShowClearConfirm(false);
+    void purgeScoreRows(allScores, allDecisions);
   };
 
   const addJudge = () => {
@@ -1315,12 +1839,15 @@ export default function App() {
   };
 
   const deleteJudge = (id: string) => {
+    const removedScores = (state.scores || []).filter(s => s.judgeId === id);
+    const removedDecisions = (state.decisions || []).filter(d => d.judgeId === id);
     setState(prev => ({
       ...prev,
       judges: prev.judges.filter(j => j.id !== id),
       scores: prev.scores.filter(s => s.judgeId !== id),
       decisions: prev.decisions.filter(d => d.judgeId !== id)
     }));
+    void purgeScoreRows(removedScores, removedDecisions);
   };
 
   const addMentor = () => {
@@ -1341,14 +1868,21 @@ export default function App() {
   };
 
   const deleteMentor = (id: string) => {
+    // Mentor scores are stored under judgeId. This handler previously left them behind entirely,
+    // locally as well as on the server.
+    const removedScores = (state.scores || []).filter(s => s.judgeId === id);
+    const removedDecisions = (state.decisions || []).filter(d => d.judgeId === id);
     setState(prev => ({
       ...prev,
       mentors: prev.mentors.filter(m => m.id !== id),
+      scores: prev.scores.filter(s => s.judgeId !== id),
+      decisions: prev.decisions.filter(d => d.judgeId !== id),
       teams: prev.teams.map(t => ({
         ...t,
         mentorIds: t.mentorIds?.filter(mid => mid !== id)
       }))
     }));
+    void purgeScoreRows(removedScores, removedDecisions);
   };
 
   const updateScore = (teamId: string, judgeId: string, criterionId: string, score: number | null, phaseId: string, selectedSubCriteriaIds?: string[], subCriteriaValues?: Record<string, number>) => {
@@ -1357,8 +1891,6 @@ export default function App() {
     const scoreData: ScoreEntry = { teamId, judgeId, criterionId, score, phaseId };
     if (selectedSubCriteriaIds !== undefined) scoreData.selectedSubCriteriaIds = selectedSubCriteriaIds;
     if (subCriteriaValues !== undefined) scoreData.subCriteriaValues = subCriteriaValues;
-    
-    const scoreId = `${teamId}_${judgeId}_${criterionId}_${phaseId}`;
     
     // Optimistic local update
     setAppState(prev => ({
@@ -1370,16 +1902,14 @@ export default function App() {
       })
     }));
 
-    // Firestore update
-    const scoreDoc = doc(db, 'hackathons', appState.selectedHackathonId, 'scores', scoreId);
-    setDoc(scoreDoc, scoreData).catch(err => handleFirestoreError(err, OperationType.UPDATE, `scores/${scoreId}`));
+    void saveScore(appState.selectedHackathonId, scoreData).catch(err =>
+      reportSaveFailure('Score not saved', err));
   };
 
   const updateDecision = (teamId: string, judgeId: string, phaseId: string, decision: JudgeDecision['decision']) => {
     if (!appState.selectedHackathonId) return;
 
     const decisionData: JudgeDecision = { teamId, judgeId, phaseId, decision };
-    const decisionId = `${teamId}_${judgeId}_${phaseId}`;
 
     // Optimistic local update
     setAppState(prev => ({
@@ -1391,9 +1921,8 @@ export default function App() {
       })
     }));
 
-    // Firestore update
-    const decisionDoc = doc(db, 'hackathons', appState.selectedHackathonId, 'decisions', decisionId);
-    setDoc(decisionDoc, decisionData).catch(err => handleFirestoreError(err, OperationType.UPDATE, `decisions/${decisionId}`));
+    void saveDecision(appState.selectedHackathonId, decisionData).catch(err =>
+      reportSaveFailure('Verdict not saved', err));
   };
 
   const generateId = () => {
@@ -1423,12 +1952,15 @@ export default function App() {
   };
 
   const deletePhase = (id: string) => {
+    const removedScores = (state.scores || []).filter(s => s.phaseId === id);
+    const removedDecisions = (state.decisions || []).filter(d => d.phaseId === id);
     setState(prev => ({
       ...prev,
       phases: prev.phases.filter(p => p.id !== id),
       scores: prev.scores.filter(s => s.phaseId !== id),
       decisions: prev.decisions.filter(d => d.phaseId !== id)
     }));
+    void purgeScoreRows(removedScores, removedDecisions);
   };
 
   const addCriterion = (phaseId: string) => {
@@ -1455,6 +1987,7 @@ export default function App() {
   };
 
   const deleteCriterion = (phaseId: string, criterionId: string) => {
+    const removedScores = (state.scores || []).filter(s => s.criterionId === criterionId);
     setState(prev => ({
       ...prev,
       phases: prev.phases.map(p => p.id === phaseId ? {
@@ -1463,6 +1996,8 @@ export default function App() {
       } : p),
       scores: prev.scores.filter(s => s.criterionId !== criterionId)
     }));
+    // Decisions are per phase, not per criterion, so only scores are affected here.
+    void purgeScoreRows(removedScores, []);
   };
 
   const addSubCriterion = (phaseId: string, criterionId: string) => {
@@ -1538,16 +2073,12 @@ export default function App() {
     // Optimistic local update
     setAppState(prev => ({
       ...prev,
-      hackathons: [...prev.hackathons, newHackathon],
-      selectedHackathonId: newId
+      hackathons: [...prev.hackathons, newHackathon]
     }));
+    navigate(hackathonRoute(newId));
 
-    // Firestore update
-    const hackathonDoc = doc(db, 'hackathons', newId);
-    setDoc(hackathonDoc, {
-      ...newHackathon,
-      updatedAt: Timestamp.now()
-    }).catch(err => handleFirestoreError(err, OperationType.CREATE, `hackathons/${newId}`));
+    void saveHackathon(newHackathon).catch(err =>
+      reportSaveFailure('Could not create the hackathon', err));
   };
 
   const openAwardConfig = () => {
@@ -1579,26 +2110,55 @@ export default function App() {
       // Optimistic local update
       setAppState(prev => ({
         ...prev,
-        hackathons: prev.hackathons.filter(h => h.id !== hackathonToDelete),
-        selectedHackathonId: prev.selectedHackathonId === hackathonToDelete ? null : prev.selectedHackathonId
+        hackathons: prev.hackathons.filter(h => h.id !== hackathonToDelete)
       }));
+      if (route.hackathonId === hackathonToDelete) navigate(HOME_ROUTE, { replace: true });
 
-      // Firestore update
-      const hackathonDoc = doc(db, 'hackathons', hackathonToDelete);
-      deleteDoc(hackathonDoc).catch(err => handleFirestoreError(err, OperationType.DELETE, `hackathons/${hackathonToDelete}`));
+      // Scores and verdicts go with it: the foreign keys cascade, which used to have to be done
+      // by hand a batch at a time.
+      void deleteHackathonRow(hackathonToDelete).catch(err =>
+        reportSaveFailure('Could not delete the hackathon', err));
       
       setHackathonToDelete(null);
     }
   };
 
+  /**
+   * Copies a link and flags `key` as copied for a couple of seconds. Falls back to showing the URL
+   * because clipboard access is refused outside a secure or focused context — reporting a copy that
+   * did not happen would lose the link silently.
+   */
+  const copyLink = async (url: string, key: string, fallbackPrompt: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(key);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      window.prompt(fallbackPrompt, url);
+    }
+  };
+
+  const copyPublicLink = (overlay: 'present' | 'awards') =>
+    copyLink(
+      publicPresentationUrl(state.id, overlay),
+      `public-${overlay}`,
+      'Copy this link to open the presentation on another screen:',
+    );
+
   const exportData = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", "pitching_data.json");
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
+    // Blob URL rather than a data: URL — encoding the whole hackathon inline grows past what
+    // browsers accept in an href once an event has a few hundred scores.
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${(state.hackathonName || 'hackathon').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-scores.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    // Revoked on a later tick: doing it synchronously after click() can cancel the download
+    // before the browser has started reading the blob.
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
   };
 
   if (!isAuthReady) {
@@ -1609,8 +2169,22 @@ export default function App() {
     );
   }
 
-  if (!user) {
+  // /p/… projector links are the one route that renders without an account.
+  if (!user && !isPublicView) {
     return <LandingPage onLogin={login} onSignup={signup} />;
+  }
+
+  // The domain root is the tools launcher; each tool owns a namespace below it.
+  if (!route.tool) {
+    return (
+      <ErrorBoundary>
+        <ToolLauncher
+          user={user}
+          onLogout={logout}
+          onOpen={(tool: Tool) => navigate({ ...LAUNCHER_ROUTE, tool })}
+        />
+      </ErrorBoundary>
+    );
   }
 
   return (
@@ -1619,21 +2193,31 @@ export default function App() {
         <div className="min-h-screen bg-bg p-12">
           <div className="max-w-6xl mx-auto space-y-12">
             <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-              <div>
-                <h1 className="text-5xl font-black tracking-tighter text-ink uppercase italic">Hackathon Hub</h1>
-                <p className="text-muted font-bold tracking-widest uppercase text-xs mt-2">Select a hackathon to manage or score</p>
+              <div className="space-y-3">
+                {/* This tool now sits under the launcher at the domain root, so there has to be a
+                    way back up to it. */}
+                <button
+                  onClick={() => navigate(LAUNCHER_ROUTE)}
+                  className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted hover:text-ink transition-colors"
+                >
+                  <ArrowLeft size={14} /> All tools
+                </button>
+                <div>
+                  <h1 className="text-3xl md:text-4xl xl:text-5xl font-black tracking-tighter text-ink uppercase italic whitespace-nowrap">Hackathon Hub</h1>
+                  <p className="text-muted font-bold tracking-widest uppercase text-xs mt-2">Select a hackathon to manage or score</p>
+                </div>
               </div>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-4">
                   <div className="text-right hidden sm:block">
-                    <p className="text-xs font-bold text-ink uppercase tracking-wider">{user.displayName || user.email}</p>
+                    <p className="text-xs font-bold text-ink uppercase tracking-wider">{user?.displayName || user?.email}</p>
                     <button onClick={logout} className="text-[10px] font-bold text-rose-500 uppercase tracking-widest hover:underline">Logout</button>
                   </div>
-                  {user.photoURL ? (
+                  {user?.photoURL ? (
                     <img src={user.photoURL} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" />
                   ) : (
                     <div className="w-10 h-10 rounded-full bg-ink text-accent flex items-center justify-center font-black text-xs border-2 border-white shadow-sm">
-                      {user.email?.[0].toUpperCase()}
+                      {user?.email?.[0]?.toUpperCase()}
                     </div>
                   )}
                 </div>
@@ -1653,7 +2237,7 @@ export default function App() {
             {appState.hackathons.map(hackathon => (
               <div 
                 key={hackathon.id}
-                onClick={() => setAppState(prev => ({ ...prev, selectedHackathonId: hackathon.id }))}
+                onClick={() => navigate(hackathonRoute(hackathon.id))}
                 className="group bg-white border border-border rounded-3xl p-8 space-y-6 cursor-pointer hover:border-ink transition-all hover:shadow-2xl hover:shadow-ink/5 relative overflow-hidden"
               >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500" />
@@ -1723,8 +2307,11 @@ export default function App() {
                     </div>
                     <h3 className="text-2xl font-black uppercase italic tracking-tighter">Delete Hackathon?</h3>
                     <p className="text-muted text-sm leading-relaxed">
-                      This will permanently delete **{appState.hackathons.find(h => h.id === hackathonToDelete)?.hackathonName}** and all its data. 
-                      This action cannot be undone.
+                      This will permanently delete{' '}
+                      <span className="font-black text-ink">
+                        {appState.hackathons.find(h => h.id === hackathonToDelete)?.hackathonName}
+                      </span>{' '}
+                      and all its data. This action cannot be undone.
                     </p>
                   </div>
                   <div className="flex gap-3">
@@ -1750,15 +2337,16 @@ export default function App() {
     ) : (
       <div className="min-h-screen flex bg-bg">
       {/* Sidebar */}
-      {!isExternalView && (
+      {!isExternalView && showAppShell && (
         <nav className="w-64 bg-white border-r border-border flex flex-col p-6 gap-8 overflow-y-auto sticky top-0 h-screen shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-ink rounded-xl flex items-center justify-center shadow-lg shadow-ink/10 shrink-0">
-              <Trophy className="w-6 h-6 text-accent" />
+            {/* Company mark, from the brand kit. The dual-tone logo needs a dark container. */}
+            <div className="w-10 h-10 bg-brand-ink rounded-xl flex items-center justify-center shadow-lg shadow-ink/10 shrink-0 p-1.5">
+              <BrandLogo variant="icon-dark" className="w-full h-full" />
             </div>
             <div>
-              <h1 className="text-sm font-bold tracking-tight leading-none">PITCHING SYSTEM</h1>
-              <p className="text-[9px] text-muted font-bold uppercase tracking-widest mt-1">Event Scoring</p>
+              <h1 className="text-sm font-bold tracking-tight leading-none">HACKATHON HUB</h1>
+              <p className="text-[9px] text-muted font-bold uppercase tracking-widest mt-1">BASE Playhouse</p>
             </div>
           </div>
 
@@ -1838,18 +2426,21 @@ export default function App() {
             </div>
           )}
           <div className="space-y-1 mt-auto pt-8 border-t border-border">
-            <NavItem active={false} onClick={() => setAppState(prev => ({ ...prev, selectedHackathonId: null }))} icon={<ArrowLeft size={18}/>} label="Back to Home" />
+            {/* Two levels up now: the hackathon list, then the tools launcher. */}
+            <NavItem active={false} onClick={() => navigate(HOME_ROUTE)} icon={<ArrowLeft size={18}/>} label="All Hackathons" />
+            <NavItem active={false} onClick={() => navigate(LAUNCHER_ROUTE)} icon={<Home size={18}/>} label="All Tools" />
           </div>
         </nav>
       )}
 
-      {/* Main Content */}
+      {/* Main Content — hidden behind a projector link or a full-screen presentation. */}
+      {showAppShell && (
       <main className="flex-1 min-w-0 overflow-y-auto p-8">
         {isExternalView && (
           <div className="mb-8 flex justify-between items-center bg-white p-4 rounded-2xl border border-border shadow-sm">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-ink rounded-xl flex items-center justify-center shadow-lg shadow-ink/10 shrink-0">
-                <Trophy className="w-6 h-6 text-accent" />
+              <div className="w-10 h-10 bg-brand-ink rounded-xl flex items-center justify-center shadow-lg shadow-ink/10 shrink-0 p-1.5">
+                <BrandLogo variant="icon-dark" className="w-full h-full" />
               </div>
               <div>
                 <h1 className="text-sm font-bold tracking-tight leading-none uppercase">{state.hackathonName || "PITCHING SYSTEM"}</h1>
@@ -1863,10 +2454,8 @@ export default function App() {
                   {activeTab.startsWith('judge-') ? state.judges.find(j => j.id === activeTab.substring(6))?.name : state.mentors.find(m => m.id === activeTab.substring(7))?.name}
                 </p>
               </div>
-              <button 
-                onClick={() => {
-                  window.location.href = window.location.origin + window.location.pathname;
-                }}
+              <button
+                onClick={() => navigate(HOME_ROUTE)}
                 className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-muted"
                 title="Exit External View"
               >
@@ -1875,14 +2464,18 @@ export default function App() {
             </div>
           </div>
         )}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2 }}
-          >
+        {/* No mode="wait": it withholds the incoming panel until the outgoing exit animation
+            finishes, so if frames stall the previous tab stays on screen while the URL and
+            sidebar have already moved on. */}
+        {/* No exit animation, and therefore no AnimatePresence: keeping the outgoing panel alive
+            until an exit finished meant two panels were mounted at once (a layout jump), and if
+            frames stalled the old one stayed on screen while the URL had already moved on. */}
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+        >
             {activeTab === 'scoring-structure' && (
               <div className="space-y-8">
                 <div className="border-b border-ink/10 pb-4 flex justify-between items-end">
@@ -2205,8 +2798,44 @@ export default function App() {
                       <p className="text-muted text-sm mt-2">Comprehensive view of all criteria scores across all teams</p>
                     </div>
                     <div className="flex items-center gap-3">
+                      {/* The legend doubles as the switch — one control, and it explains itself. */}
+                      <button
+                        onClick={() => setShowHeatmap(!showHeatmap)}
+                        aria-pressed={showHeatmap}
+                        title={showHeatmap ? 'Turn the colour scale off' : 'Turn the colour scale on'}
+                        className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all ${
+                          showHeatmap
+                            ? 'bg-white border-border shadow-sm'
+                            : 'bg-slate-50 border-transparent hover:border-border'
+                        }`}
+                      >
+                        <span className={`w-3.5 h-3.5 rounded flex items-center justify-center border transition-all ${
+                          showHeatmap ? 'bg-ink border-ink' : 'border-muted/40'
+                        }`}>
+                          {showHeatmap && <Check size={10} strokeWidth={4} className="text-white" />}
+                        </span>
+                        <span className={`text-[9px] font-bold uppercase tracking-widest ${
+                          showHeatmap ? 'text-ink' : 'text-muted'
+                        }`}>
+                          Low
+                        </span>
+                        <span
+                          className="h-2 w-20 rounded-full border border-border transition-all"
+                          style={{
+                            backgroundImage: showHeatmap
+                              ? 'linear-gradient(to right, hsl(0 80% 92%), hsl(60 80% 92%), hsl(120 80% 92%))'
+                              : 'linear-gradient(to right, hsl(0 0% 94%), hsl(0 0% 86%))',
+                          }}
+                        />
+                        <span className={`text-[9px] font-bold uppercase tracking-widest ${
+                          showHeatmap ? 'text-ink' : 'text-muted'
+                        }`}>
+                          High
+                        </span>
+                        <span className="text-[9px] font-medium text-muted/60">per column</span>
+                      </button>
                       <div className="relative w-64">
-                        <input 
+                        <input
                           type="text"
                           placeholder="Search teams..."
                           value={searchQuery}
@@ -2289,31 +2918,7 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {[...teamScores]
-                            .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.productName.toLowerCase().includes(searchQuery.toLowerCase()))
-                            .sort((a, b) => {
-                              let valA: any = 0;
-                              let valB: any = 0;
-                              
-                              if (allScoresSort.key === 'name') {
-                                valA = a.originalIndex;
-                                valB = b.originalIndex;
-                              } else if (allScoresSort.key === 'finalScore') {
-                                valA = a.finalScore;
-                                valB = b.finalScore;
-                              } else if (allScoresSort.key.startsWith('phase-')) {
-                                const phaseId = allScoresSort.key.replace('phase-', '');
-                                valA = a.phaseScores[phaseId] || 0;
-                                valB = b.phaseScores[phaseId] || 0;
-                              } else {
-                                valA = (a as any).criteriaScores[allScoresSort.key] || 0;
-                                valB = (b as any).criteriaScores[allScoresSort.key] || 0;
-                              }
-
-                              if (valA < valB) return allScoresSort.direction === 'desc' ? 1 : -1;
-                              if (valA > valB) return allScoresSort.direction === 'desc' ? -1 : 1;
-                              return 0;
-                            })
+                          {allScoresView.rows
                             .map((team, idx) => (
                               <tr key={team.id} className="border-b border-border hover:bg-slate-50/50 transition-colors">
                                 <td className="p-4 text-center sticky left-0 bg-white z-30 border-r border-border">
@@ -2338,22 +2943,40 @@ export default function App() {
                                     </div>
                                   </div>
                                 </td>
-                                {state.phases.map(phase => (
-                                  <React.Fragment key={phase.id}>
-                                    {phase.criteria.map(c => (
-                                      <td key={c.id} className="p-4 text-center font-mono text-xs">
-                                        {((team as any).criteriaScores[c.id] !== null) ? (team as any).criteriaScores[c.id].toFixed(2) : '-'}
+                                {state.phases.map(phase => {
+                                  const phaseTotal = team.phaseScores[phase.id] || 0;
+                                  return (
+                                    <React.Fragment key={phase.id}>
+                                      {phase.criteria.map(c => {
+                                        const value = team.criteriaScores[c.id];
+                                        return (
+                                          <td
+                                            key={c.id}
+                                            className="p-4 text-center font-mono text-xs font-semibold"
+                                            style={heatCellStyle(c.id, value)}
+                                          >
+                                            {value !== null && value !== undefined ? value.toFixed(2) : '-'}
+                                          </td>
+                                        );
+                                      })}
+                                      <td
+                                        className={`p-4 text-center font-mono text-xs font-bold border-x border-border/60 ${
+                                          showHeatmap ? '' : 'bg-slate-50/50'
+                                        }`}
+                                        style={heatCellStyle(`phase-${phase.id}`, phaseTotal)}
+                                      >
+                                        {phaseTotal.toFixed(2)}
                                       </td>
-                                    ))}
-                                    <td className="p-4 text-center font-mono text-xs font-bold bg-slate-50/50">
-                                      {(team.phaseScores[phase.id] || 0).toFixed(2)}
-                                    </td>
-                                  </React.Fragment>
-                                ))}
-                                <td className="p-4 text-center bg-accent/5">
-                                  <span className="font-mono font-black text-sm text-accent">
-                                    {(team.finalScore || 0).toFixed(2)}
-                                  </span>
+                                    </React.Fragment>
+                                  );
+                                })}
+                                <td
+                                  className={`p-4 text-center font-mono font-black text-sm ${
+                                    showHeatmap ? '' : 'bg-accent/5 text-accent'
+                                  }`}
+                                  style={heatCellStyle('finalScore', team.finalScore)}
+                                >
+                                  {(team.finalScore || 0).toFixed(2)}
                                 </td>
                                 <td className="p-4 text-center">
                                   <input 
@@ -2424,33 +3047,44 @@ export default function App() {
                       ) : (
                         <div className="group relative">
                           <div className="flex items-center gap-3">
-                            <h2 className="text-4xl font-extrabold tracking-tight">{state.hackathonName}</h2>
-                            <button 
+                            {/* Never wraps — long event names scale down instead of stacking. */}
+                            <h2 className="text-2xl md:text-3xl xl:text-4xl font-extrabold tracking-tight whitespace-nowrap">{state.hackathonName}</h2>
+                            <button
                               onClick={() => setIsEditingHackathonInfo(true)}
-                              className="p-2 opacity-0 group-hover:opacity-100 hover:bg-slate-100 rounded-full transition-all text-accent"
+                              className="shrink-0 p-2 opacity-0 group-hover:opacity-100 hover:bg-slate-100 rounded-full transition-all text-accent"
                             >
                               <Edit2 size={18} />
                             </button>
                           </div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <Badge variant="outline" className="bg-accent/5 text-accent border-accent/20 uppercase tracking-widest text-[10px] px-3 py-1">
-                              {state.hackathonSubtitle}
-                            </Badge>
-                            <p className="text-muted text-sm italic">Live rankings based on {state.hackathonName} phase scores only</p>
-                          </div>
+                          {/* Only rendered when there is a subtitle — with the description line gone,
+                              an empty subtitle would otherwise leave a blank pill floating here. */}
+                          {state.hackathonSubtitle && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge variant="outline" className="bg-accent/5 text-accent border-accent/20 uppercase tracking-widest text-[10px] px-3 py-1 whitespace-nowrap">
+                                {state.hackathonSubtitle}
+                              </Badge>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
                     <div className="flex items-center gap-3 w-full md:w-auto">
                       <button 
                         onClick={() => {
-                          setRevealedRanks([]);
                           setShowHackathonPresentation(true);
                         }}
                         className="btn-secondary flex items-center gap-2 bg-accent text-white border-none hover:bg-accent/90 shadow-lg shadow-accent/20"
                       >
                         <Maximize2 className="w-4 h-4" />
                         <span>Present Mode</span>
+                      </button>
+                      <button
+                        onClick={() => copyPublicLink('present')}
+                        className={`btn-secondary shrink-0 shadow-sm ${copiedId === 'public-present' ? 'text-emerald-600 border-emerald-200 bg-emerald-50' : ''}`}
+                        title="Copy a link to open this on another screen — no sign-in needed"
+                      >
+                        {copiedId === 'public-present' ? <Check className="w-4 h-4" /> : <LinkIcon className="w-4 h-4" />}
+                        <span>{copiedId === 'public-present' ? 'Link Copied' : 'Share Screen Link'}</span>
                       </button>
                       <div className="relative flex-1 md:w-64">
                         <input 
@@ -2570,7 +3204,7 @@ export default function App() {
                         </thead>
                         <tbody>
                           {hackathonSortedTeams
-                            .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.productName.toLowerCase().includes(searchQuery.toLowerCase()))
+                            .filter(t => matchesTeamSearch(t))
                             .map((team, index) => (
                               <tr key={team.id} className="border-b border-border hover:bg-slate-50/50 transition-colors group">
                                 <td className="p-4 text-center">
@@ -2625,28 +3259,27 @@ export default function App() {
             {activeTab === 'dashboard' && (
               <div className="space-y-12">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-                  <div>
-                    <h2 className="text-5xl font-black tracking-tighter italic uppercase">Finalist Leaderboard</h2>
+                  <div className="min-w-0">
+                    {/* Never wraps — scales down on narrower viewports instead of stacking. */}
+                    <h2 className="text-3xl md:text-4xl xl:text-5xl font-black tracking-tighter italic uppercase whitespace-nowrap">Finalist Leaderboard</h2>
                     <p className="text-muted text-sm mt-2 font-medium">The ultimate ranking of innovation and execution</p>
                   </div>
                   <div className="flex items-center gap-3 w-full md:w-auto">
-                    <div className="relative flex-1 md:w-64">
-                      <input 
-                        type="text"
-                        placeholder="Search finalists..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="input-field pl-10 bg-white shadow-sm border-ink/5"
-                      />
-                      <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-muted w-4 h-4" />
-                    </div>
-                    <button 
+                    <button
                       onClick={openAwardConfig}
                       className="btn-secondary shrink-0 shadow-sm bg-accent text-white border-none hover:bg-accent/90"
                     >
                       <Play className="w-4 h-4" /> Award Slides
                     </button>
-                    <button 
+                    <button
+                      onClick={() => copyPublicLink('awards')}
+                      className={`btn-secondary shrink-0 shadow-sm ${copiedId === 'public-awards' ? 'text-emerald-600 border-emerald-200 bg-emerald-50' : ''}`}
+                      title="Copy a link to open the award slides on another screen — no sign-in needed"
+                    >
+                      {copiedId === 'public-awards' ? <Check className="w-4 h-4" /> : <LinkIcon className="w-4 h-4" />}
+                      {copiedId === 'public-awards' ? 'Link Copied' : 'Share Screen Link'}
+                    </button>
+                    <button
                       onClick={exportData}
                       className="btn-secondary shrink-0 shadow-sm"
                     >
@@ -2656,7 +3289,9 @@ export default function App() {
                 </div>
 
                 {/* Premium Winners Circle */}
-                {sortedTeams.length >= 3 && searchQuery === '' && (
+                {/* No searchQuery condition: this tab has no search box, and searchQuery is shared
+                    with the other tabs — a term typed elsewhere would silently hide the podium. */}
+                {sortedTeams.length >= 3 && (
                   <div className="relative py-10">
                     {/* Background Decoration */}
                     <div className="absolute inset-0 bg-gradient-to-b from-gold/5 to-transparent rounded-[3rem] -z-10" />
@@ -2766,8 +3401,8 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody className="bg-white">
+                        {/* Unfiltered for the same reason as the podium above. */}
                         {sortedTeams
-                          .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.productName.toLowerCase().includes(searchQuery.toLowerCase()))
                           .map((team, idx) => (
                           <tr key={team.id} className={`border-b border-border hover:bg-slate-50 transition-all group ${idx < 3 ? 'bg-gold/5' : ''}`}>
                             <td className="p-6 text-center">
@@ -2796,7 +3431,7 @@ export default function App() {
                             </td>
                             {state.phases.map(phase => (
                               <td key={phase.id} className="p-6 text-center font-mono text-sm font-bold text-slate-600">
-                                {((team.phaseScores?.[phase.id] || 0) * (phase.weight / 100)).toFixed(2)}
+                                {((team.phaseScores?.[phase.id] || 0) * ((phase.weight ?? 0) / 100)).toFixed(2)}
                               </td>
                             ))}
                             <td className="p-6 text-center bg-gold/5">
@@ -2965,7 +3600,9 @@ export default function App() {
                                         </div>
                                       </th>
                                     ))}
-                                    <th rowSpan={2} className="p-4 text-center bg-accent/10 w-24 border-b border-border sticky right-0 top-0 z-50">
+                                    {/* Opaque rose rather than bg-accent/10: this column is sticky, so a
+                                        translucent tint let the columns scrolling underneath show through. */}
+                                    <th rowSpan={2} className="p-4 text-center bg-rose-100 w-24 border-b border-l border-border sticky right-0 top-0 z-50">
                                       <span className="label-micro mb-0 text-accent">Phase Total</span>
                                     </th>
                                   </tr>
@@ -3009,11 +3646,19 @@ export default function App() {
                                       </div>
                                     </th>
                                   ))}
-                                  <th className="p-4 text-center bg-slate-100/50 w-24 border-b border-border sticky right-0 top-0 z-50">
+                                  {/* Not sticky: the matching body cells are not either, and pinning
+                                      both of these to right-0 stacked them on top of each other —
+                                      the Total label was completely hidden behind Potential. */}
+                                  <th className="p-4 text-center bg-slate-100 w-24 border-b border-l border-border sticky top-0 z-40">
                                     <span className="label-micro mb-0">Total</span>
                                   </th>
-                                  <th className="p-4 text-center bg-slate-100/50 w-32 border-b border-border sticky right-0 top-0 z-50">
+                                  <th className="p-4 text-center bg-slate-100 w-32 border-b border-border sticky top-0 z-40">
                                     <span className="label-micro mb-0">{phase.type === 'judge' ? 'Verdict' : 'Potential'}</span>
+                                  </th>
+                                  {/* The body always renders a Phase Total cell after the per-scorer
+                                      columns; this header was missing, leaving the two out of step. */}
+                                  <th className="p-4 text-center bg-rose-100 w-24 border-b border-l border-border sticky right-0 top-0 z-50">
+                                    <span className="label-micro mb-0 text-accent">Phase Total</span>
                                   </th>
                                 </tr>
                               )}
@@ -3087,7 +3732,7 @@ export default function App() {
                                                                   value={subVal ?? ''}
                                                                   onChange={(e) => {
                                                                     const val = e.target.value === '' ? null : Number(e.target.value);
-                                                                    const finalVal = val !== null ? Math.max(0, Math.min(val, sub.score || Infinity)) : null;
+                                                                    const finalVal = val !== null ? clampScore(val, scorableMax(sub.score)) : null;
                                                                     const nextValues = { ...(scoreObj?.subCriteriaValues || {}) };
                                                                     if (finalVal === null) delete nextValues[sub.id];
                                                                     else nextValues[sub.id] = finalVal;
@@ -3161,11 +3806,13 @@ export default function App() {
                                                   ) : (
                                                     <input 
                                                       type="number"
-                                                      placeholder="-"
+                                                      placeholder={scorableMax(criterion.maxScore) ? '-' : 'n/a'}
+                                                      disabled={!scorableMax(criterion.maxScore)}
+                                                      title={scorableMax(criterion.maxScore) ? undefined : `"${criterion.name}" has no Max Score, so it cannot be scored. Set one under Criteria.`}
                                                       value={scoreValue ?? ''}
                                                       onChange={(e) => {
                                                         const val = e.target.value === '' ? null : Number(e.target.value);
-                                                        const finalVal = val !== null ? Math.max(0, Math.min(val, criterion.maxScore || Infinity)) : null;
+                                                        const finalVal = val !== null ? clampScore(val, scorableMax(criterion.maxScore)) : null;
                                                         updateScore(team.id, judgeId, criterion.id, finalVal, phase.id);
                                                       }}
                                                       className={`w-16 bg-white border p-2 rounded-lg font-mono text-center text-sm focus:border-ink/20 outline-none transition-all ${scoreValue == null ? 'border-red-200 bg-red-50/30' : 'border-ink/5'}`}
@@ -3218,7 +3865,7 @@ export default function App() {
                                         </React.Fragment>
                                       );
                                     })}
-                                    <td className="p-4 text-center bg-accent/5 sticky right-0 z-10 font-black font-mono text-sm text-accent group-hover:bg-accent/10 transition-colors border-b border-border">
+                                    <td className="p-4 text-center bg-rose-50 sticky right-0 z-20 font-black font-mono text-sm text-accent group-hover:bg-rose-100 transition-colors border-b border-l border-border">
                                       {team.phaseScores[phase.id]?.toFixed(2) || '0.00'}
                                     </td>
                                   </tr>
@@ -3518,39 +4165,6 @@ export default function App() {
                                               </div>
                                             </div>
                                           )}
-
-                                          {false && (
-                                            <div className="space-y-3">
-                                              <div className="text-[10px] font-bold text-muted uppercase tracking-widest px-1">Potential</div>
-                                              <div className="flex gap-2">
-                                                {[
-                                                  { id: 'high', label: 'High', icon: <Check size={14} />, color: 'bg-emerald-500 border-emerald-500' },
-                                                  { id: 'medium', label: 'Medium', icon: <HelpCircle size={14} />, color: 'bg-amber-500 border-amber-500 text-white' },
-                                                  { id: 'low', label: 'Low', icon: <HelpCircle size={14} />, color: 'bg-slate-400 border-slate-400 text-white' },
-                                                  { id: 'critical', label: 'Critical', icon: <X size={14} />, color: 'bg-rose-500 border-rose-500' }
-                                                ].map(d => {
-                                                  const active = state.decisions.find(dec => dec.teamId === team.id && dec.judgeId === 'system' && dec.phaseId === activePhase.id)?.decision === d.id;
-                                                  return (
-                                                    <button 
-                                                      key={d.id}
-                                                      onClick={() => {
-                                                        const currentDecision = state.decisions.find(dec => dec.teamId === team.id && dec.judgeId === 'system' && dec.phaseId === activePhase.id)?.decision;
-                                                        updateDecision(team.id, 'system', activePhase.id, currentDecision === d.id ? null : d.id as any);
-                                                      }}
-                                                      className={`px-6 py-3 rounded-xl text-xs font-bold uppercase transition-all shadow-sm border flex items-center gap-2 ${
-                                                        active 
-                                                          ? `${d.color} text-white`
-                                                          : 'bg-white border-ink/5 text-muted hover:border-ink/20 hover:text-ink'
-                                                      }`}
-                                                    >
-                                                      {d.icon}
-                                                      {d.label}
-                                                    </button>
-                                                  );
-                                                })}
-                                              </div>
-                                            </div>
-                                          )}
                                         </div>
 
                                         {/* Criteria List */}
@@ -3622,7 +4236,7 @@ export default function App() {
                                                                 value={scoreObj?.subCriteriaValues?.[sub.id] ?? ''}
                                                                 onChange={(e) => {
                                                                   const val = e.target.value === '' ? null : Number(e.target.value);
-                                                                  const finalVal = val !== null ? Math.max(0, Math.min(val, sub.score || Infinity)) : null;
+                                                                  const finalVal = val !== null ? clampScore(val, scorableMax(sub.score)) : null;
                                                                   const nextValues = { ...(scoreObj?.subCriteriaValues || {}) };
                                                                   if (finalVal === null) delete nextValues[sub.id];
                                                                   else nextValues[sub.id] = finalVal;
@@ -3721,11 +4335,13 @@ export default function App() {
                                                     <div className="relative max-w-[200px]">
                                                       <input 
                                                         type="number"
-                                                        placeholder="Score"
+                                                        placeholder={scorableMax(criterion.maxScore) ? 'Score' : 'n/a'}
+                                                        disabled={!scorableMax(criterion.maxScore)}
+                                                        title={scorableMax(criterion.maxScore) ? undefined : `"${criterion.name}" has no Max Score, so it cannot be scored. Set one under Criteria.`}
                                                         value={scoreValue ?? ''}
                                                         onChange={(e) => {
                                                           const val = e.target.value === '' ? null : Number(e.target.value);
-                                                          const finalVal = val !== null ? Math.max(0, Math.min(val, criterion.maxScore || Infinity)) : null;
+                                                          const finalVal = val !== null ? clampScore(val, scorableMax(criterion.maxScore)) : null;
                                                           updateScore(team.id, judgeId, criterion.id, finalVal, activePhase.id);
                                                         }}
                                                         className={`w-full bg-white border p-4 rounded-xl font-mono text-2xl font-black focus:border-ink/20 outline-none transition-all ${
@@ -3785,7 +4401,7 @@ export default function App() {
                                       {(() => {
                                         const teamScore = teamScores.find(t => t.id === team.id);
                                         const phaseScore = teamScore?.phaseScores[activePhase.id] || 0;
-                                        return (phaseScore * (activePhase.weight / 100)).toFixed(2);
+                                        return (phaseScore * ((activePhase.weight ?? 0) / 100)).toFixed(2);
                                       })()}
                                     </div>
                                   </div>
@@ -3819,13 +4435,45 @@ export default function App() {
                       <h2 className="text-3xl font-extrabold tracking-tight">Criteria & Weights</h2>
                       <p className="text-muted text-sm mt-1">Configure scoring weights and evaluation criteria</p>
                     </div>
-                    <button 
+                    <button
                       onClick={addPhase}
                       className="btn-primary"
                     >
                       <Plus size={18} /> Add New Phase
                     </button>
                   </div>
+
+                  {/* Configuration that makes the scoring code quietly ignore things. Surfaced here
+                      because the symptom otherwise shows up as a wrong total, far from the cause. */}
+                  {(misconfiguredCriteria.length > 0 || phaseWeightIssues.length > 0 || (state.phases?.length > 0 && Math.round(totalPhaseWeight) !== 100)) && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <HelpCircle size={18} className="text-amber-600 shrink-0" />
+                        <h3 className="text-sm font-black uppercase tracking-widest text-amber-700">
+                          Configuration affects the scores
+                        </h3>
+                      </div>
+                      <ul className="space-y-1.5 text-xs text-amber-800/90 list-disc pl-5">
+                        {state.phases?.length > 0 && Math.round(totalPhaseWeight) !== 100 && (
+                          <li>
+                            Phase weights add up to <span className="font-mono font-bold">{totalPhaseWeight}%</span>, not 100% —
+                            a perfect team can only reach {totalPhaseWeight} of 100 on the final score.
+                          </li>
+                        )}
+                        {phaseWeightIssues.map(p => (
+                          <li key={p.name}>
+                            <span className="font-bold">{p.name}</span>: criterion weights add up to{' '}
+                            <span className="font-mono font-bold">{p.total}%</span>, not 100%.
+                          </li>
+                        ))}
+                        {misconfiguredCriteria.map((issue, i) => (
+                          <li key={`${issue.criterion}-${i}`}>
+                            <span className="font-bold">{issue.phase} › {issue.criterion}</span>: {issue.problem}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
                   {/* Phase Weights */}
                   <div className="space-y-6">
@@ -4084,8 +4732,8 @@ export default function App() {
                                 No criteria defined for {phase.name} phase
                               </div>
                             )}
-                            <div className={`text-[10px] font-mono uppercase font-bold ${phase.criteria.reduce((sum, c) => sum + c.weight, 0) === 100 ? 'text-green-600' : 'text-accent'}`}>
-                              {phase.name} Weight Total: {phase.criteria.reduce((sum, c) => sum + c.weight, 0)}%
+                            <div className={`text-[10px] font-mono uppercase font-bold ${phase.criteria.reduce((sum, c) => sum + (c.weight ?? 0), 0) === 100 ? 'text-green-600' : 'text-accent'}`}>
+                              {phase.name} Weight Total: {phase.criteria.reduce((sum, c) => sum + (c.weight ?? 0), 0)}%
                             </div>
                           </motion.div>
                         )}
@@ -4288,8 +4936,7 @@ export default function App() {
                                 <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <button 
                                     onClick={() => {
-                                      const url = `${window.location.origin}${window.location.pathname}?role=judge&id=${judge.id}&hackathonId=${state.id}`;
-                                      navigator.clipboard.writeText(url);
+                                      navigator.clipboard.writeText(sharedScoringUrl(state.id, 'judge', judge.id));
                                       setCopiedId(judge.id);
                                       setTimeout(() => setCopiedId(null), 2000);
                                     }}
@@ -4483,8 +5130,7 @@ export default function App() {
                                 <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <button 
                                     onClick={() => {
-                                      const url = `${window.location.origin}${window.location.pathname}?role=mentor&id=${mentor.id}&hackathonId=${state.id}`;
-                                      navigator.clipboard.writeText(url);
+                                      navigator.clipboard.writeText(sharedScoringUrl(state.id, 'mentor', mentor.id));
                                       setCopiedId(mentor.id);
                                       setTimeout(() => setCopiedId(null), 2000);
                                     }}
@@ -4532,9 +5178,46 @@ export default function App() {
 
                 return (
                   <div className="space-y-12">
-                    <div className="border-b border-ink/10 pb-4">
-                      <h2 className="text-3xl font-black uppercase italic tracking-tighter">Mentor Scoring: {mentor.name}</h2>
-                      <p className="text-ink/40 font-mono text-[10px] uppercase mt-1">Enter scores for your assigned teams across all mentor phases.</p>
+                    <div className="border-b border-ink/10 pb-4 flex flex-wrap items-end justify-between gap-4">
+                      <div>
+                        <h2 className="text-3xl font-black uppercase italic tracking-tighter">Mentor Scoring: {mentor.name}</h2>
+                        <p className="text-ink/40 font-mono text-[10px] uppercase mt-1">Enter scores for your assigned teams across all mentor phases.</p>
+                      </div>
+
+                      {/* Hand this to the mentor so they can score on their own device. It opens the
+                          same sheet without the admin sidebar (the /s/… route). Hidden when the
+                          mentor is already on that route — this block renders in both views. */}
+                      {!isExternalView && (
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black uppercase tracking-widest text-muted">
+                          Scoring link for {mentor.name}
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            readOnly
+                            value={sharedScoringUrl(state.id, 'mentor', mentor.id)}
+                            onFocus={e => e.currentTarget.select()}
+                            className="w-[280px] bg-slate-50 border border-border rounded-xl px-3 py-2 text-[10px] font-mono text-muted truncate outline-none focus:border-ink/20 focus:text-ink"
+                          />
+                          <button
+                            onClick={() => copyLink(
+                              sharedScoringUrl(state.id, 'mentor', mentor.id),
+                              `mentor-link-${mentor.id}`,
+                              `Copy this scoring link for ${mentor.name}:`,
+                            )}
+                            className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${
+                              copiedId === `mentor-link-${mentor.id}`
+                                ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                                : 'bg-ink text-white border-ink hover:bg-ink/90'
+                            }`}
+                          >
+                            {copiedId === `mentor-link-${mentor.id}`
+                              ? <><Check size={14} /> Copied</>
+                              : <><LinkIcon size={14} /> Copy</>}
+                          </button>
+                        </div>
+                      </div>
+                      )}
                     </div>
 
                     {mentorPhases.length === 0 ? (
@@ -4647,7 +5330,7 @@ export default function App() {
                                                             value={scoreObj?.subCriteriaValues?.[sub.id] ?? ''}
                                                             onChange={(e) => {
                                                               const val = e.target.value === '' ? null : Number(e.target.value);
-                                                              const finalVal = val !== null ? Math.max(0, Math.min(val, sub.score || Infinity)) : null;
+                                                              const finalVal = val !== null ? clampScore(val, scorableMax(sub.score)) : null;
                                                               const nextValues = { ...(scoreObj?.subCriteriaValues || {}) };
                                                               if (finalVal === null) delete nextValues[sub.id];
                                                               else nextValues[sub.id] = finalVal;
@@ -4724,11 +5407,13 @@ export default function App() {
                                                 <div className="flex justify-center">
                                                   <input 
                                                     type="number"
-                                                    placeholder="-"
+                                                    placeholder={scorableMax(criterion.maxScore) ? '-' : 'n/a'}
+                                                    disabled={!scorableMax(criterion.maxScore)}
+                                                    title={scorableMax(criterion.maxScore) ? undefined : `"${criterion.name}" has no Max Score, so it cannot be scored. Set one under Criteria.`}
                                                     value={scoreValue ?? ''}
                                                     onChange={(e) => {
                                                       const val = e.target.value === '' ? null : Number(e.target.value);
-                                                      const finalVal = val !== null ? Math.max(0, Math.min(val, criterion.maxScore || Infinity)) : null;
+                                                      const finalVal = val !== null ? clampScore(val, scorableMax(criterion.maxScore)) : null;
                                                       updateScore(team.id, mentor.id, criterion.id, finalVal, phase.id);
                                                     }}
                                                     className={`w-16 bg-bg/30 border p-2 rounded-lg font-mono text-center text-sm focus:bg-white focus:border-ink/20 outline-none transition-all ${scoreValue == null ? 'border-red-200 bg-red-50/30' : 'border-ink/5'}`}
@@ -4857,7 +5542,7 @@ export default function App() {
                                                         value={scoreObj?.subCriteriaValues?.[sub.id] ?? ''}
                                                         onChange={(e) => {
                                                           const val = e.target.value === '' ? null : Number(e.target.value);
-                                                          const finalVal = val !== null ? Math.max(0, Math.min(val, sub.score || Infinity)) : null;
+                                                          const finalVal = val !== null ? clampScore(val, scorableMax(sub.score)) : null;
                                                           const nextValues = { ...(scoreObj?.subCriteriaValues || {}) };
                                                           if (finalVal === null) delete nextValues[sub.id];
                                                           else nextValues[sub.id] = finalVal;
@@ -4932,11 +5617,13 @@ export default function App() {
                                             <div className="flex justify-center">
                                               <input 
                                                 type="number"
-                                                placeholder="-"
+                                                placeholder={scorableMax(criterion.maxScore) ? '-' : 'n/a'}
+                                                disabled={!scorableMax(criterion.maxScore)}
+                                                title={scorableMax(criterion.maxScore) ? undefined : `"${criterion.name}" has no Max Score, so it cannot be scored. Set one under Criteria.`}
                                                 value={scoreValue ?? ''}
                                                 onChange={(e) => {
                                                   const val = e.target.value === '' ? null : Number(e.target.value);
-                                                  const finalVal = val !== null ? Math.max(0, Math.min(val, criterion.maxScore || Infinity)) : null;
+                                                  const finalVal = val !== null ? clampScore(val, scorableMax(criterion.maxScore)) : null;
                                                   updateScore(team.id, judge.id, criterion.id, finalVal, phase.id);
                                                 }}
                                                 className={`w-16 bg-bg/30 border p-2 rounded-lg font-mono text-center text-sm focus:bg-white focus:border-ink/20 outline-none transition-all ${scoreValue == null ? 'border-red-200 bg-red-50/30' : 'border-ink/5'}`}
@@ -4991,21 +5678,12 @@ export default function App() {
                       <p className="text-ink/40 font-mono text-xs uppercase mt-1">Adjust display order and final rankings</p>
                     </div>
                     <div className="flex gap-2">
-                      <button 
+                      <button
                         onClick={loadMockData}
-                        disabled={isDemoLoading}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold uppercase text-[10px] tracking-widest transition-all shadow-lg ${
-                          isDemoLoading 
-                            ? 'bg-accent/50 text-white cursor-wait' 
-                            : 'bg-accent text-white hover:bg-accent/80 shadow-accent/20'
-                        }`}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold uppercase text-[10px] tracking-widest transition-all shadow-lg bg-accent text-white hover:bg-accent/80 shadow-accent/20"
                       >
-                        {isDemoLoading ? (
-                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ) : (
-                          <Database size={14} />
-                        )}
-                        {isDemoLoading ? 'Loading...' : 'Load Mock Data'}
+                        <Database size={14} />
+                        Load Mock Data
                       </button>
                     </div>
                   </div>
@@ -5105,25 +5783,11 @@ export default function App() {
                   <div className="bg-white border border-ink/10 p-8 rounded-2xl shadow-sm space-y-6">
                     <h3 className="text-xl font-black uppercase italic">Data Portability</h3>
                     <div className="grid grid-cols-3 gap-4">
-                      <button 
+                      <button
                         onClick={loadMockData}
-                        disabled={isDemoLoading}
-                        className={`p-4 rounded-xl font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
-                          isDemoLoading 
-                            ? 'bg-accent/50 text-white cursor-wait' 
-                            : 'bg-accent text-white hover:bg-accent/80 shadow-lg shadow-accent/20'
-                        }`}
+                        className="bg-accent text-white p-4 rounded-xl font-bold uppercase tracking-widest hover:bg-accent/80 shadow-lg shadow-accent/20 transition-all flex items-center justify-center gap-2"
                       >
-                        {isDemoLoading ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            Loading...
-                          </>
-                        ) : (
-                          <>
-                            <Database size={18} /> Load Demo Data
-                          </>
-                        )}
+                        <Database size={18} /> Load Demo Data
                       </button>
                       <button 
                         onClick={exportData}
@@ -5138,12 +5802,35 @@ export default function App() {
                         <Trash2 size={18} /> Clean Data
                       </button>
                     </div>
+                    {demoStatus && (
+                      <div className={`flex items-start gap-3 p-4 rounded-xl border ${
+                        demoStatus.kind === 'ok'
+                          ? 'bg-emerald-50 border-emerald-200'
+                          : 'bg-rose-50 border-rose-200'
+                      }`}>
+                        {demoStatus.kind === 'ok'
+                          ? <Check size={18} className="text-emerald-600 shrink-0 mt-0.5" />
+                          : <XCircle size={18} className="text-rose-500 shrink-0 mt-0.5" />}
+                        <div className="space-y-1 min-w-0">
+                          <p className={`text-xs font-bold uppercase tracking-widest ${
+                            demoStatus.kind === 'ok' ? 'text-emerald-700' : 'text-rose-600'
+                          }`}>
+                            {demoStatus.kind === 'ok' ? 'Demo data loaded' : 'Demo data failed'}
+                          </p>
+                          <p className={`text-xs leading-relaxed break-words ${
+                            demoStatus.kind === 'ok' ? 'text-emerald-700/80' : 'text-rose-600/80'
+                          }`}>
+                            {demoStatus.message}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
-            </motion.div>
-          </AnimatePresence>
+        </motion.div>
         </main>
+      )}
 
         {/* Clear Data Confirmation Modal */}
         <AnimatePresence>
@@ -5161,7 +5848,8 @@ export default function App() {
                   </div>
                   <h3 className="text-2xl font-black uppercase italic tracking-tighter">Clean All Data?</h3>
                   <p className="text-muted text-sm leading-relaxed">
-                    This will permanently delete ALL data including **Criteria (Phases), Teams, and Judges**. 
+                    This will permanently delete ALL data including{' '}
+                    <span className="font-black text-ink">Criteria (Phases), Teams, and Judges</span>.
                     You will need to create everything from scratch. This action cannot be undone.
                   </p>
                 </div>
@@ -5314,7 +6002,44 @@ export default function App() {
           {showAwardPresentation && (() => {
             const currentSlide = awardSlides[awardPresentationStep];
             const team = state.teams.find(t => t.id === currentSlide?.teamId);
-            
+
+            /**
+             * A projector link to a hackathon with no award slides used to render an empty
+             * overlay — no team, no slides, and (because the exit controls are hidden in public
+             * view) nothing to click. Say so, and always offer a way out of this state.
+             */
+            if (awardSlides.length === 0) {
+              return (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[200] bg-[#0f0f0f] text-white flex flex-col items-center justify-center gap-6 p-8 text-center"
+                >
+                  <Trophy size={48} className="text-white/15" />
+                  <div className="space-y-2 max-w-md">
+                    <h2 className="text-2xl font-black uppercase italic tracking-tighter">No awards set up yet</h2>
+                    <p className="text-white/40 text-sm leading-relaxed">
+                      {isPublicView
+                        ? 'The organiser has not configured the award slides for this event yet.'
+                        : 'Open “Award Slides” on the leaderboard to choose the teams and award names first.'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      // Clearing only the overlay would leave publicView set, which hides the app
+                      // shell and renders nothing — a public viewer has to go all the way home.
+                      if (isPublicView) navigate(HOME_ROUTE);
+                      else setShowAwardPresentation(false);
+                    }}
+                    className="px-8 py-3 bg-white text-black rounded-full font-black uppercase text-xs tracking-widest hover:bg-white/90 transition-all"
+                  >
+                    {isPublicView ? 'Back to home' : 'Close'}
+                  </button>
+                </motion.div>
+              );
+            }
+
             return (
               <motion.div 
                 initial={{ opacity: 0 }}
@@ -5413,28 +6138,30 @@ export default function App() {
                   </div>
 
                   {awardPresentationStep < awardSlides.length - 1 ? (
-                    <button 
+                    <button
                       onClick={() => setAwardPresentationStep(prev => prev + 1)}
                       className="p-4 bg-accent hover:bg-accent/80 rounded-full shadow-lg shadow-accent/20 transition-all"
                     >
                       <ChevronRight size={32} />
                     </button>
-                  ) : (
-                    <button 
+                  ) : !isPublicView ? (
+                    <button
                       onClick={() => setShowAwardPresentation(false)}
                       className="px-8 py-4 bg-white text-black rounded-full font-black uppercase tracking-widest hover:bg-white/90 transition-all"
                     >
                       Finish
                     </button>
-                  )}
+                  ) : null}
                 </div>
 
-                <button 
-                  onClick={() => setShowAwardPresentation(false)}
-                  className="absolute top-8 right-8 p-3 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all"
-                >
-                  <X size={24} />
-                </button>
+                {!isPublicView && (
+                  <button
+                    onClick={() => setShowAwardPresentation(false)}
+                    className="absolute top-8 right-8 p-3 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-all"
+                  >
+                    <X size={24} />
+                  </button>
+                )}
               </motion.div>
             );
           })()}
@@ -5447,9 +6174,6 @@ export default function App() {
             const visibleCriteria = hackathonPhase?.criteria.filter(c => !state.hiddenCriteriaIds?.includes(c.id)) || [];
             const activeCriterion = visibleCriteria[activeHackathonCriterionIdx % (visibleCriteria.length || 1)];
             
-            const formatTime = (date: Date) => {
-              return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }).toUpperCase();
-            };
 
             const getTeamCriterionScore = (teamId: string, criterionId: string) => {
               const entries = state.scores.filter(s => s.teamId === teamId && s.phaseId === hackathonPhaseId && s.criterionId === criterionId);
@@ -5472,33 +6196,16 @@ export default function App() {
                 <div className={`flex justify-between items-center px-8 py-1 backdrop-blur-md border-b transition-colors duration-500 ${
                   presentationTheme === 'dark' ? 'bg-black/20 border-white/5' : 'bg-white/40 border-black/5'
                 }`}>
-                  {/* Left: Empty space to keep clock centered */}
-                  <div className="flex-1" />
-
-                  {/* Center: Clock */}
+                  {/* Clock only. The flanking spacer and the Powered By block are both gone —
+                      flex-1 on this one child is what keeps the clock centred. */}
                   <div className="flex-1 flex justify-center">
                     <div className={`relative px-6 py-1 rounded-xl border shadow-[0_0_20px_rgba(225,29,72,0.15)] transition-colors ${
                       presentationTheme === 'dark' ? 'bg-black/40 border-accent/30' : 'bg-white/60 border-accent/30'
                     }`}>
                       <div className="text-xl font-mono font-black text-accent tracking-widest">
-                        {formatTime(currentTime)}
+                        <LiveClock />
                       </div>
                       <div className="absolute inset-0 bg-accent/5 blur-xl rounded-2xl -z-10" />
-                    </div>
-                  </div>
-
-                  {/* Right: Powered By */}
-                  <div className="flex-1 flex items-center justify-end gap-6">
-                    <div className="text-right">
-                      <div className={`text-[8px] font-bold uppercase tracking-widest mb-0.5 transition-colors ${
-                        presentationTheme === 'dark' ? 'text-white/40' : 'text-black/40'
-                      }`}>Powered By</div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 bg-accent rounded flex items-center justify-center">
-                          <Trophy className="w-3 h-3 text-white" />
-                        </div>
-                        <div className="text-xs font-black uppercase tracking-tighter">Base Playhouse</div>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -5670,8 +6377,9 @@ export default function App() {
                       className="flex-1 overflow-y-auto custom-scrollbar"
                     >
                       <table className="w-full text-left border-collapse min-w-[800px]">
-                        <thead className={`sticky top-0 z-10 transition-colors ${
-                          presentationTheme === 'dark' ? 'bg-[#0a0a0a]/80' : 'bg-white/80'
+                        {/* Fully opaque: at 80% the rows scrolling underneath showed through. */}
+                        <thead className={`sticky top-0 z-20 transition-colors ${
+                          presentationTheme === 'dark' ? 'bg-[#0a0a0a]' : 'bg-white'
                         }`}>
                           <tr className={`border-b transition-colors ${
                             presentationTheme === 'dark' ? 'border-white/10' : 'border-black/10'
@@ -5784,27 +6492,74 @@ export default function App() {
                       >
                         {(isLoadingMusic || !isPlayerReady) ? <Loader2 size={12} className="animate-spin" /> : isPlayingMusic ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
                       </button>
-                      <button 
-                        onClick={() => {
-                          setReadyUrl('');
-                          setIsLoadingMusic(true);
-                          setMusicError(null);
-                        }}
-                        title="Reload Music"
-                        className={`w-8 h-8 flex items-center justify-center transition-colors ${
-                          presentationTheme === 'dark' ? 'text-white/40 hover:text-white' : 'text-black/40 hover:text-black'
-                        }`}
-                      >
-                        <RefreshCw size={14} className={isLoadingMusic ? 'animate-spin' : ''} />
-                      </button>
-                      <button 
-                        onClick={() => setIsMuted(!isMuted)}
-                        className={`w-8 h-8 flex items-center justify-center transition-colors ${
-                          isMuted ? 'text-rose-500' : (presentationTheme === 'dark' ? 'text-white/60 hover:text-white' : 'text-black/60 hover:text-black')
-                        }`}
-                      >
-                        {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                      </button>
+                      <div className="relative" ref={volumeControlRef}>
+                        <button
+                          onClick={() => setShowVolumeSlider(!showVolumeSlider)}
+                          title={isMuted ? 'Muted' : `Volume ${volume}%`}
+                          aria-label={isMuted ? 'Muted' : `Volume ${volume} percent`}
+                          className={`w-8 h-8 flex items-center justify-center transition-colors ${
+                            isMuted || volume === 0
+                              ? 'text-rose-500'
+                              : showVolumeSlider
+                                ? 'text-accent'
+                                : (presentationTheme === 'dark' ? 'text-white/60 hover:text-white' : 'text-black/60 hover:text-black')
+                          }`}
+                        >
+                          {isMuted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                        </button>
+
+                        {showVolumeSlider && (
+                          <div
+                            className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-3 flex flex-col items-center gap-2.5 px-2.5 py-3 rounded-xl border shadow-xl ${
+                              presentationTheme === 'dark'
+                                ? 'bg-[#1a1a1a] border-white/10'
+                                : 'bg-white border-black/10'
+                            }`}
+                          >
+                            {/* Fixed width + tabular figures: the readout is the widest child, so
+                                without this the card resized as the number changed. */}
+                            <span
+                              className={`w-9 shrink-0 text-center text-[10px] font-mono font-bold tabular-nums leading-none ${
+                                presentationTheme === 'dark' ? 'text-white/70' : 'text-black/70'
+                              }`}
+                            >
+                              {isMuted ? '—' : `${volume}%`}
+                            </span>
+                            {/*
+                              Vertical via writing-mode rather than a rotate() transform, so the
+                              track keeps its real hit area and drag direction. direction:rtl puts
+                              loud at the top.
+                            */}
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              step={1}
+                              value={volume}
+                              onChange={e => {
+                                setVolume(Number(e.target.value));
+                                // Dragging the slider is an intent to hear something.
+                                if (isMuted) setIsMuted(false);
+                              }}
+                              className={`h-28 w-1 rounded-full appearance-none cursor-pointer accent-accent [writing-mode:vertical-lr] [direction:rtl] ${
+                                presentationTheme === 'dark' ? 'bg-white/20' : 'bg-black/20'
+                              }`}
+                            />
+                            {/* Mute stays reachable — the speaker button now opens this panel. */}
+                            <button
+                              onClick={() => setIsMuted(!isMuted)}
+                              title={isMuted ? 'Unmute' : 'Mute'}
+                              className={`shrink-0 transition-colors ${
+                                isMuted
+                                  ? 'text-rose-500'
+                                  : (presentationTheme === 'dark' ? 'text-white/60 hover:text-white' : 'text-black/60 hover:text-black')
+                              }`}
+                            >
+                              {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       <button 
                         onClick={() => setNotificationsEnabled(!notificationsEnabled)}
                         className={`w-8 h-8 flex items-center justify-center transition-colors ${
@@ -5845,16 +6600,20 @@ export default function App() {
                         {presentationTheme === 'dark' ? <Sun className="w-3 h-3" /> : <Moon className="w-3 h-3" />}
                         {presentationTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
                       </button>
-                      <div className={`w-px h-3 ${presentationTheme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`} />
-                      <button 
-                        onClick={() => setShowPresentationSettings(true)}
-                        className={`text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center gap-2 ${
-                          presentationTheme === 'dark' ? 'text-white/60 hover:text-white' : 'text-black/60 hover:text-black'
-                        }`}
-                      >
-                        <Settings2 className="w-3 h-3" />
-                        Settings
-                      </button>
+                      {!isPublicView && (
+                        <>
+                          <div className={`w-px h-3 ${presentationTheme === 'dark' ? 'bg-white/10' : 'bg-black/10'}`} />
+                          <button
+                            onClick={() => setShowPresentationSettings(true)}
+                            className={`text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center gap-2 ${
+                              presentationTheme === 'dark' ? 'text-white/60 hover:text-white' : 'text-black/60 hover:text-black'
+                            }`}
+                          >
+                            <Settings2 className="w-3 h-3" />
+                            Settings
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -5867,9 +6626,9 @@ export default function App() {
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={() => setShowHackathonPresentation(false)}
-                  className="fixed bottom-8 right-8 w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors z-[110] border border-white/10"
+                  className={`fixed bottom-8 right-8 w-12 h-12 rounded-full bg-white/10 items-center justify-center hover:bg-white/20 transition-colors z-[110] border border-white/10 ${isPublicView ? 'hidden' : 'flex'}`}
                 >
                   <X className="w-6 h-6" />
                 </button>
@@ -5944,20 +6703,20 @@ export default function App() {
                                   <div className={`flex-1 px-4 py-2 rounded-xl text-xs font-mono border truncate ${
                                     presentationTheme === 'dark' ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/5 border-black/10 text-black/50'
                                   }`}>
-                                    {state.musicUrl ? (
-                                      <span className="flex items-center gap-2">
-                                        <Music size={12} className="text-accent" />
-                                        {state.musicUrl.includes('youtube.com') || state.musicUrl.includes('youtu.be') 
-                                          ? 'YouTube Link' 
-                                          : state.musicUrl.split('/').pop()?.split('?')[0] || 'Music File Uploaded'}
-                                      </span>
-                                    ) : 'No music set'}
+                                    <span className="flex items-center gap-2">
+                                      <Music size={12} className="text-accent" />
+                                      {musicAudioUrl === defaultBackgroundMusic
+                                        ? 'Default track'
+                                        : (state.musicUrl ?? '').includes('youtube.com') || (state.musicUrl ?? '').includes('youtu.be')
+                                          ? 'YouTube Link'
+                                          : (state.musicUrl ?? '').split('/').pop()?.split('?')[0] || 'Music File Uploaded'}
+                                    </span>
                                   </div>
-                                  {state.musicUrl && (
-                                    <button 
+                                  {musicAudioUrl !== defaultBackgroundMusic && (
+                                    <button
                                       onClick={() => setState(prev => ({ ...prev, musicUrl: '' }))}
                                       className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                                      title="Remove Music"
+                                      title="Revert to the default track"
                                     >
                                       <Trash2 size={16} />
                                     </button>
@@ -6003,7 +6762,7 @@ export default function App() {
                                   </div>
                                 </div>
                               </div>
-                              <p className="text-[8px] opacity-40 italic">Supports MP3, WAV, YouTube, SoundCloud, and Google Drive.</p>
+                              <p className="text-[8px] opacity-40 italic">Supports MP3, WAV, YouTube, SoundCloud, and Google Drive. Clearing it restores the default track.</p>
                               {musicError && (
                                 <p className="text-[9px] text-red-400 font-medium">{musicError}</p>
                               )}
@@ -6107,229 +6866,329 @@ export default function App() {
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-ink/95 z-[9999] overflow-auto backdrop-blur-xl p-4 md:p-8"
             >
-              <div className="max-w-7xl mx-auto space-y-8">
-                <div className="flex items-center justify-between border-b border-white/10 pb-6">
+              <div className="max-w-[1600px] mx-auto space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-6">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-accent rounded-2xl flex items-center justify-center text-ink shadow-lg shadow-accent/20">
+                    <div className="w-12 h-12 bg-accent rounded-2xl flex items-center justify-center text-white shadow-lg shadow-accent/20">
                       <GitCompare size={24} strokeWidth={2.5} />
                     </div>
                     <div>
                       <h2 className="text-2xl md:text-3xl font-black uppercase italic tracking-tighter text-white">Team Comparison</h2>
-                      <p className="text-white/40 font-mono text-[10px] uppercase tracking-widest">Comparing {selectedCompareTeamIds.length} selected teams</p>
+                      <p className="text-white/40 font-mono text-[10px] uppercase tracking-widest">
+                        {comparison
+                          ? `${comparison.teams.length} teams · ${comparison.criterionCount} criteria · ${comparison.tiedCount} effectively level`
+                          : 'Select at least two teams'}
+                      </p>
                     </div>
                   </div>
-                  <button 
-                    onClick={() => setShowCompareView(false)}
-                    className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/5 hover:bg-white/10 text-white flex items-center justify-center transition-all group border border-white/10"
-                  >
-                    <X size={20} className="group-hover:rotate-90 transition-transform duration-300" />
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {comparison && (
+                      <button
+                        onClick={() => setCompareOnlyDifferences(!compareOnlyDifferences)}
+                        className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${
+                          compareOnlyDifferences
+                            ? 'bg-accent text-white border-accent shadow-lg shadow-accent/20'
+                            : 'bg-white/5 text-white/60 border-white/10 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        <span className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${
+                          compareOnlyDifferences ? 'bg-white border-white' : 'border-white/30'
+                        }`}>
+                          {compareOnlyDifferences && <Check size={10} strokeWidth={4} className="text-accent" />}
+                        </span>
+                        Only differences
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowCompareView(false)}
+                      className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/5 hover:bg-white/10 text-white flex items-center justify-center transition-all group border border-white/10"
+                    >
+                      <X size={20} className="group-hover:rotate-90 transition-transform duration-300" />
+                    </button>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {selectedCompareTeamIds.map(teamId => {
-                    const team = state.teams.find(t => t.id === teamId);
-                    if (!team) return null;
-                    
-                    // Use the pre-calculated scores for accuracy
-                    const teamData = teamScores.find(ts => ts.id === teamId);
-                    if (!teamData) return null;
+                {!comparison ? (
+                  <div className="py-24 text-center space-y-3">
+                    <GitCompare size={40} className="mx-auto text-white/10" />
+                    <p className="text-white/40 text-sm">Pick two or more teams to compare them.</p>
+                  </div>
+                ) : (() => {
+                  const { teams, rows, biggestGaps } = comparison;
+                  const visibleRows = compareOnlyDifferences
+                    ? rows.filter(r => r.kind !== 'criterion' || !r.tied)
+                    : rows;
 
-                    return (
-                      <motion.div 
-                        layout
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        key={teamId} 
-                        className="bg-white/5 border border-white/10 rounded-3xl p-6 space-y-6 hover:bg-white/10 transition-all group relative overflow-hidden"
-                      >
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-accent/10 transition-colors" />
-                        
-                        <div className="space-y-2 relative z-10">
-                          <div className="flex items-center justify-between">
-                            <Badge variant="accent" className="bg-accent/20 text-accent border-accent/30">Team {(team as any).originalIndex + 1}</Badge>
-                            <button 
-                              onClick={() => toggleCompare(teamId)}
-                              className="text-white/20 hover:text-red-400 transition-colors p-1"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                          <h3 className="text-2xl font-black uppercase italic tracking-tighter text-white group-hover:text-accent transition-colors truncate" title={team.name}>{team.name}</h3>
-                          <p className="text-white/40 font-mono text-[10px] uppercase tracking-widest truncate">{team.productName}</p>
+                  const fmt = (v: number | null, row: typeof rows[number]) =>
+                    v === null ? '—' : `${v.toFixed(row.kind === 'criterion' ? 2 : 1)}${row.suffix}`;
+
+                  return (
+                    <div className="space-y-6">
+                      {/* What actually separates them */}
+                      {biggestGaps.length > 0 && (
+                        <div className="grid gap-3 md:grid-cols-3">
+                          {biggestGaps.map((row, idx) => {
+                            const bestTeam = teams[row.values.findIndex(v => v !== null && v === row.best)];
+                            const worstTeam = teams[row.values.findIndex(v => v !== null && v === row.worst)];
+                            return (
+                              <div key={row.key} className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-accent">
+                                    {idx === 0 ? 'Biggest difference' : `#${idx + 1} difference`}
+                                  </span>
+                                  <span className="text-[10px] font-mono font-black text-white">
+                                    {row.spread.toFixed(2)} gap
+                                  </span>
+                                </div>
+                                <div className="text-sm font-black uppercase tracking-tight text-white leading-tight">{row.label}</div>
+                                <div className="space-y-1 text-[10px] font-mono">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-emerald-300 truncate">{bestTeam?.name}</span>
+                                    <span className="text-emerald-300 font-bold shrink-0">{fmt(row.best, row)}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-rose-300/80 truncate">{worstTeam?.name}</span>
+                                    <span className="text-rose-300/80 font-bold shrink-0">{fmt(row.worst, row)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
+                      )}
 
-                        <div className="grid grid-cols-2 gap-4 relative z-10">
-                          <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
-                            <div className="text-[10px] font-bold text-white/40 uppercase mb-1">Final Score</div>
-                            <div className="text-2xl font-black text-white">{(teamData.finalScore || 0).toFixed(2)}</div>
-                          </div>
-                          <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
-                            <div className="text-[10px] font-bold text-white/40 uppercase mb-1">Percentage</div>
-                            <div className="text-2xl font-black text-accent">{(teamData.finalScore || 0).toFixed(1)}%</div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-4 relative z-10">
-                          <div className="text-[10px] font-bold text-white/60 uppercase tracking-widest border-b border-white/10 pb-2">Phase & Criteria Breakdown</div>
-                          <div className="space-y-6">
-                            {state.phases.map(phase => {
-                              const phaseScore = teamData.phaseScores[phase.id] || 0;
+                      {/* Same measure on the same row — the point of the redesign */}
+                      <div className="overflow-x-auto rounded-2xl border border-white/10">
+                        <table className="w-full border-collapse min-w-max">
+                          <thead>
+                            <tr className="bg-[#141c2e]">
+                              <th className="sticky left-0 z-20 bg-[#141c2e] text-left p-4 min-w-[200px] border-b border-r border-white/10">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-white/40">Metric</span>
+                              </th>
+                              {teams.map(team => (
+                                <th key={team.id} className="p-4 min-w-[140px] border-b border-white/10 align-bottom">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="text-left min-w-0">
+                                      <div className="text-xs font-black uppercase tracking-tight text-white truncate" title={team.name}>{team.name}</div>
+                                      <div className="text-[9px] font-mono text-white/30 truncate">{team.productName}</div>
+                                    </div>
+                                    <button
+                                      onClick={() => toggleCompare(team.id)}
+                                      className="text-white/20 hover:text-rose-400 transition-colors shrink-0"
+                                      title="Remove from comparison"
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+                                </th>
+                              ))}
+                              <th className="p-4 min-w-[90px] border-b border-l border-white/10">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-white/40">Gap</span>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {visibleRows.map(row => {
+                              const isHeadline = row.kind === 'final';
+                              const isPhase = row.kind === 'phase';
+                              const rowBg = isHeadline ? 'bg-accent/10' : isPhase ? 'bg-white/[0.04]' : '';
 
                               return (
-                                <div key={phase.id} className="space-y-3">
-                                  <div className="space-y-1.5">
-                                    <div className="flex items-center justify-between text-[10px]">
-                                      <span className="text-white/80 font-black uppercase truncate max-w-[150px]">{phase.name}</span>
-                                      <span className="text-accent font-black italic">{phaseScore.toFixed(1)}%</span>
+                                <tr key={row.key} className={`border-b border-white/5 ${rowBg}`}>
+                                  <th className={`sticky left-0 z-10 text-left p-4 border-r border-white/10 ${
+                                    isHeadline ? 'bg-[#1d1a2e]' : isPhase ? 'bg-[#171e30]' : 'bg-[#141c2e]'
+                                  }`}>
+                                    <div className={`${
+                                      isHeadline ? 'text-sm font-black uppercase italic text-accent'
+                                        : isPhase ? 'text-xs font-black uppercase text-white'
+                                        : 'text-xs font-medium text-white/70 pl-3'
+                                    } truncate max-w-[220px]`} title={row.label}>
+                                      {row.label}
                                     </div>
-                                    <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                                      <motion.div 
-                                        initial={{ width: 0 }}
-                                        animate={{ width: `${phaseScore}%` }}
-                                        className="h-full bg-accent shadow-[0_0_8px_rgba(255,100,100,0.4)]"
-                                      />
-                                    </div>
-                                  </div>
-                                  
-                                  {/* Criteria Details */}
-                                  <div className="grid grid-cols-1 gap-2 pl-2 border-l border-white/5">
-                                    {phase.criteria.map(criterion => {
-                                      const criterionScore = teamData.criteriaScores[criterion.id];
-                                      const displayScore = criterionScore !== null ? criterionScore.toFixed(1) : '-';
-                                      const percent = criterionScore !== null ? (criterionScore / criterion.maxScore) * 100 : 0;
+                                    {row.note && (
+                                      <div className={`text-[9px] font-mono text-white/25 ${row.kind === 'criterion' ? 'pl-3' : ''}`}>{row.note}</div>
+                                    )}
+                                  </th>
 
-                                      return (
-                                        <div key={criterion.id} className="flex flex-col gap-1">
-                                          <div className="flex justify-between items-center text-[9px]">
-                                            <span className="text-white/40 font-medium truncate max-w-[140px]">{criterion.name}</span>
-                                            <span className="text-white/60 font-mono">{displayScore} / {criterion.maxScore}</span>
+                                  {row.values.map((value, i) => {
+                                    const isBest = value !== null && !row.tied && value === row.best;
+                                    const isWorst = value !== null && !row.tied && value === row.worst && row.spread > 0;
+                                    const deltaFromBest = value !== null && row.best !== null ? value - row.best : null;
+                                    const pct = value !== null && row.scaleMax > 0 ? (value / row.scaleMax) * 100 : 0;
+
+                                    return (
+                                      <td
+                                        key={teams[i].id}
+                                        className={`p-4 align-middle ${
+                                          isBest ? 'bg-emerald-500/10' : isWorst ? 'bg-rose-500/[0.07]' : ''
+                                        }`}
+                                      >
+                                        <div className="space-y-1.5">
+                                          <div className="flex items-baseline gap-2">
+                                            <span className={`font-mono font-black tabular-nums ${
+                                              isHeadline ? 'text-xl' : 'text-sm'
+                                            } ${
+                                              isBest ? 'text-emerald-300' : isWorst ? 'text-rose-300' : 'text-white/80'
+                                            }`}>
+                                              {fmt(value, row)}
+                                            </span>
+                                            {isBest && (
+                                              <span className="text-[8px] font-black uppercase tracking-widest text-emerald-400/80">Best</span>
+                                            )}
+                                            {!isBest && deltaFromBest !== null && deltaFromBest < 0 && (
+                                              <span className="text-[9px] font-mono text-white/30 tabular-nums">
+                                                {deltaFromBest.toFixed(row.kind === 'criterion' ? 2 : 1)}
+                                              </span>
+                                            )}
                                           </div>
-                                          <div className="h-0.5 bg-white/5 rounded-full overflow-hidden w-full">
-                                            <div 
-                                              className="h-full bg-white/20"
-                                              style={{ width: `${percent}%` }}
+                                          <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                            <div
+                                              className={`h-full rounded-full ${
+                                                isBest ? 'bg-emerald-400' : isWorst ? 'bg-rose-400/70' : 'bg-white/25'
+                                              }`}
+                                              style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
                                             />
                                           </div>
                                         </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
+                                      </td>
+                                    );
+                                  })}
+
+                                  <td className="p-4 border-l border-white/10">
+                                    {row.tied ? (
+                                      <span className="text-[9px] font-black uppercase tracking-widest text-white/25">Level</span>
+                                    ) : (
+                                      <span className={`text-xs font-mono font-black tabular-nums ${
+                                        row.spreadPct >= 20 ? 'text-accent' : 'text-white/50'
+                                      }`}>
+                                        {row.spread.toFixed(row.kind === 'criterion' ? 2 : 1)}{row.suffix}
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
                               );
                             })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Verdicts, also row-per-scorer so disagreement is visible */}
+                      {[
+                        { title: 'Judge Verdicts', people: state.judges || [], pick: (t: typeof teams[number], id: string) => t.judgeDecisions?.[id] },
+                        { title: 'Mentor Potential', people: state.mentors || [], pick: (t: typeof teams[number], id: string) => t.mentorDecisions?.[id] },
+                      ].filter(section => section.people.length > 0).map(section => (
+                        <div key={section.title} className="space-y-3">
+                          <div className="text-[10px] font-black uppercase tracking-widest text-white/60">{section.title}</div>
+                          <div className="overflow-x-auto rounded-2xl border border-white/10">
+                            <table className="w-full border-collapse min-w-max">
+                              <tbody>
+                                {section.people.map(person => {
+                                  const verdicts = teams.map(t => section.pick(t, person.id) || null);
+                                  const distinct = new Set(verdicts.map(v => v ?? 'none'));
+                                  const differs = distinct.size > 1;
+
+                                  return (
+                                    <tr key={person.id} className={`border-b border-white/5 ${differs ? 'bg-amber-400/[0.06]' : ''}`}>
+                                      <th className="sticky left-0 z-10 bg-[#141c2e] text-left p-3 min-w-[200px] border-r border-white/10">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[10px] font-bold text-white/70 truncate max-w-[150px]">{person.name}</span>
+                                          {differs && (
+                                            <span className="text-[8px] font-black uppercase tracking-widest text-amber-400/80 shrink-0">Split</span>
+                                          )}
+                                        </div>
+                                      </th>
+                                      {verdicts.map((verdict, i) => {
+                                        const tone = verdict === 'pass' || verdict === 'high'
+                                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                          : verdict === 'fail' || verdict === 'critical'
+                                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                                            : verdict === 'not_sure' || verdict === 'medium'
+                                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                              : verdict === 'low'
+                                                ? 'bg-slate-400/20 text-slate-300 border-slate-400/30'
+                                                : 'bg-white/5 text-white/25 border-white/10';
+                                        return (
+                                          <td key={teams[i].id} className="p-3 min-w-[140px]">
+                                            <span className={`inline-block px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-widest ${tone}`}>
+                                              {verdict ? String(verdict).replace('_', ' ') : 'Waiting'}
+                                            </span>
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
                           </div>
                         </div>
-
-                        {/* Judge Decisions */}
-                        <div className="space-y-3 relative z-10 pt-4 border-t border-white/10">
-                          <div className="flex items-center justify-between">
-                            <div className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Judge Decisions</div>
-                            <div className="text-[8px] text-white/30 font-mono uppercase">Final Verdict</div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            {state.judges.map(judge => {
-                              const decision = teamData.judgeDecisions?.[judge.id];
-                              const hasScored = teamData.scoredByJudgeIds?.includes(judge.id);
-                              
-                              let statusLabel = 'WAITING';
-                              let statusColor = 'bg-white/5 text-white/20 border-white/5';
-                              
-                              if (decision === 'pass') {
-                                statusLabel = 'PASS';
-                                statusColor = 'bg-emerald-500 text-white border-emerald-400 shadow-lg shadow-emerald-500/20';
-                              } else if (decision === 'fail') {
-                                statusLabel = 'FAIL';
-                                statusColor = 'bg-rose-500 text-white border-rose-400 shadow-lg shadow-rose-500/20';
-                              } else if (decision === 'not_sure') {
-                                statusLabel = 'NOT SURE';
-                                statusColor = 'bg-amber-500 text-white border-amber-400 shadow-lg shadow-amber-500/20';
-                              } else if (hasScored) {
-                                statusLabel = 'SCORING';
-                                statusColor = 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-                              }
-
-                              return (
-                                <div 
-                                  key={judge.id}
-                                  className={`flex flex-col gap-1 p-2.5 rounded-xl border transition-all duration-300 ${statusColor}`}
-                                >
-                                  <div className="flex items-center justify-between mb-0.5">
-                                    <span className="text-[8px] font-black uppercase truncate max-w-[70px] opacity-80">{judge.name}</span>
-                                    {decision === 'pass' && <Check size={10} className="text-white" />}
-                                    {decision === 'fail' && <X size={10} className="text-white" />}
-                                    {decision === 'not_sure' && <HelpCircle size={10} className="text-white" />}
-                                    {!decision && hasScored && <Edit2 size={10} className="text-blue-400" />}
-                                  </div>
-                                  <span className="text-[10px] font-black uppercase tracking-tighter">{statusLabel}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* Mentor Potentials */}
-                        {((state.mentors && state.mentors.length > 0)) && (
-                          <div className="space-y-3 relative z-10 pt-4 border-t border-white/10">
-                            <div className="flex items-center justify-between">
-                              <div className="text-[10px] font-bold text-white/60 uppercase tracking-widest">Mentor Potentials</div>
-                              <div className="text-[8px] text-white/30 font-mono uppercase">Potential Rating</div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              {/* Individual Mentor Decisions */}
-                              {state.mentors.map(mentor => {
-                                const decision = teamData.mentorDecisions?.[mentor.id];
-                                if (!decision) return null;
-                                
-                                let statusColor = 'bg-white/5 text-white/20 border-white/5';
-                                if (decision === 'high') statusColor = 'bg-emerald-500 text-white border-emerald-400';
-                                else if (decision === 'medium') statusColor = 'bg-amber-500 text-white border-amber-400';
-                                else if (decision === 'low') statusColor = 'bg-slate-400 text-white border-slate-300';
-                                else if (decision === 'critical') statusColor = 'bg-rose-500 text-white border-rose-400';
-
-                                return (
-                                  <div 
-                                    key={mentor.id}
-                                    className={`flex flex-col gap-1 p-2.5 rounded-xl border transition-all duration-300 ${statusColor}`}
-                                  >
-                                    <div className="flex items-center justify-between mb-0.5">
-                                      <span className="text-[8px] font-black uppercase truncate max-w-[70px] opacity-80">{mentor.name}</span>
-                                      {decision === 'high' && <Check size={10} />}
-                                      {decision === 'critical' && <X size={10} />}
-                                    </div>
-                                    <span className="text-[10px] font-black uppercase tracking-tighter">{decision}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </motion.div>
-                    );
-                  })}
-                </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Floating Compare Button */}
+        {/* Floating compare bar. Centring uses Tailwind's `translate` property, which is separate
+            from the `transform` motion writes, so the two do not fight over the same declaration. */}
         <AnimatePresence>
           {selectedCompareTeamIds.length >= 2 && !showCompareView && (
-            <motion.button
+            <motion.div
               initial={{ y: 100, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 100, opacity: 0 }}
-              onClick={() => setShowCompareView(true)}
-              className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-accent text-ink px-8 py-4 rounded-full font-black uppercase italic tracking-tighter shadow-2xl shadow-accent/40 flex items-center gap-3 hover:scale-105 active:scale-95 transition-all z-[999] border-2 border-white/20"
+              className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 z-[999]"
             >
-              <GitCompare size={20} strokeWidth={3} />
-              Compare {selectedCompareTeamIds.length} Teams
-            </motion.button>
+              <button
+                onClick={() => setShowCompareView(true)}
+                className="bg-accent text-ink px-8 py-4 rounded-full font-black uppercase italic tracking-tighter shadow-2xl shadow-accent/40 flex items-center gap-3 hover:scale-105 active:scale-95 transition-all border-2 border-white/20"
+              >
+                <GitCompare size={20} strokeWidth={3} />
+                Compare {selectedCompareTeamIds.length} Teams
+              </button>
+              <button
+                onClick={() => setSelectedCompareTeamIds([])}
+                title="Clear the selected teams"
+                className="bg-ink text-white px-6 py-4 rounded-full font-black uppercase italic tracking-tighter shadow-2xl shadow-ink/30 flex items-center gap-2 hover:scale-105 active:scale-95 transition-all border-2 border-white/10"
+              >
+                <X size={18} strokeWidth={3} />
+                Clear
+              </button>
+            </motion.div>
           )}
         </AnimatePresence>
       </div>
     )}
+
+      {/* Save failures. Rendered outside the app shell so it is visible on every route, including
+          the shared scoring links where a rejected write is easiest to miss. */}
+      <AnimatePresence>
+        {saveError && (
+          <motion.div
+            initial={{ y: -80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -80, opacity: 0 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-[10000] max-w-2xl w-[calc(100%-2rem)]"
+          >
+            <div className="flex items-start gap-3 bg-rose-600 text-white rounded-2xl px-5 py-4 shadow-2xl shadow-rose-900/30 border border-rose-400/40">
+              <XCircle size={20} className="shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-white/80">Not saved</p>
+                <p className="text-xs leading-relaxed break-words">{saveError}</p>
+              </div>
+              <button
+                onClick={() => setSaveError(null)}
+                className="shrink-0 p-1 rounded-lg hover:bg-white/15 transition-colors"
+                title="Dismiss"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Global Music Player Elements */}
       <div 
@@ -6340,53 +7199,52 @@ export default function App() {
           opacity: 0.01
         }}
       >
-        <ReactPlayerAny 
+        <ReactPlayerAny
           key={musicAudioUrl}
-          url={musicAudioUrl || null}
+          /**
+           * react-player v3 renamed `url` to `src` and dropped the v2 `config.youtube.playerVars`
+           * / `config.file.attributes` shapes in favour of plain media attributes. Passing the
+           * old names silently set no source at all, which is why playback never started.
+           */
+          ref={mediaRef}
+          src={musicAudioUrl || undefined}
           playing={isPlayingMusic && isPlayerReady && !!musicAudioUrl}
           muted={isMuted}
-          volume={1}
-          loop={true}
-          playsinline
-          config={{
-            youtube: {
-              playerVars: { 
-                autoplay: 0,
-                controls: 0,
-                showinfo: 0,
-                rel: 0,
-                modestbranding: 1,
-                origin: window.location.origin,
-                enablejsapi: 1
-              }
-            },
-            file: {
-              attributes: {
-                preload: "auto"
-              }
-            }
+          volume={volume / 100}
+          loop
+          playsInline
+          preload="auto"
+          onEnded={() => {
+            // Only reached when the source did not honour `loop` on its own.
+            const media = mediaRef.current;
+            if (!media || !isPlayingMusic) return;
+            media.currentTime = 0;
+            void media.play?.().catch(() => {});
           }}
           onReady={() => {
-            if (musicAudioUrl) {
-              console.log("Music Player Ready:", musicAudioUrl);
-              // Small delay to ensure player is fully initialized before allowing play
-              setTimeout(() => {
-                setReadyUrl(musicAudioUrl);
-                setIsLoadingMusic(false);
-                setMusicError(null);
-              }, 200);
-            }
+            // Ignore a ready event from a source we have already moved off of. Committing it
+            // would point readyUrl at the wrong URL and leave the safety timeout armed.
+            if (!musicAudioUrl || musicAudioUrl !== latestMusicUrl.current) return;
+            // Committed synchronously: the old 200ms delay could not be cancelled, so a
+            // pending one from a previous track landed after the switch and clobbered readyUrl.
+            setReadyUrl(musicAudioUrl);
+            setIsLoadingMusic(false);
+            setMusicError(null);
           }}
           onStart={() => {
             console.log("Music Playback Started Successfully");
             setIsLoadingMusic(false);
           }}
-          onPlay={() => console.log("YouTube: Playback started")}
-          onPause={() => console.log("YouTube: Playback paused")}
+          onPlay={() => console.log("Music: Playback started")}
+          onPause={() => console.log("Music: Playback paused")}
           onError={(e: any) => {
             if (musicAudioUrl) {
               console.error("Music playback error", e);
-              setMusicError("Playback failed. This video might have embedding restrictions.");
+              setMusicError(
+                musicAudioUrl === defaultBackgroundMusic
+                  ? "Could not play the built-in track."
+                  : "Playback failed. Check the link, or upload an audio file instead."
+              );
               setIsPlayingMusic(false);
               setIsLoadingMusic(false);
             }
